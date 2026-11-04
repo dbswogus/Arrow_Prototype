@@ -1,0 +1,4 @@
+import * as THREE from 'three';
+export function label(text,w=512,h=96,size=30,bg='#193a3d',color='#fff4da'){const canvas=document.createElement('canvas');canvas.width=w;canvas.height=h;const ctx=canvas.getContext('2d');ctx.fillStyle=bg;ctx.beginPath();ctx.roundRect(0,0,w,h,18);ctx.fill();ctx.fillStyle=color;ctx.font=`700 ${size}px "Malgun Gothic",sans-serif`;ctx.textAlign='center';ctx.textBaseline='middle';text.split('\n').forEach((line,i,a)=>ctx.fillText(line,w/2,h/2+(i-(a.length-1)/2)*(size+12),w-28));const map=new THREE.CanvasTexture(canvas);map.colorSpace=THREE.SRGBColorSpace;return new THREE.Mesh(new THREE.PlaneGeometry(w,h),new THREE.MeshBasicMaterial({map,side:THREE.DoubleSide,transparent:true,depthTest:false,depthWrite:false}))}
+export function dispose(group){for(const c of [...group.children]){c.geometry?.dispose();c.material?.map?.dispose();c.material?.dispose();group.remove(c)}}
+

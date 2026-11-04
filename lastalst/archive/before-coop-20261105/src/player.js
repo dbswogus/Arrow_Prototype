@@ -1,0 +1,1 @@
+export function move(p,dx,dz,dt,locations){const len=Math.hypot(dx,dz);if(!len)return;dx/=Math.max(1,len);dz/=Math.max(1,len);const valid=(x,z)=>Math.abs(x)<7.8&&Math.abs(z)<5.4&&!locations.some(s=>Math.abs(x-s.x)<1.15&&Math.abs(z-s.z)<1.05);const x=p.x+dx*4.5*dt,z=p.z+dz*4.5*dt;if(valid(x,p.z))p.x=x;if(valid(p.x,z))p.z=z;}

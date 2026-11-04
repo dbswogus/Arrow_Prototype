@@ -1,0 +1,4 @@
+import * as THREE from 'three';
+import {label,dispose} from './text.js';
+export class UI{constructor(){this.scene=new THREE.Scene();this.camera=new THREE.OrthographicCamera();this.group=new THREE.Group();this.scene.add(this.group);this.buttons=[];this.cache=''}resize(w,h){this.w=w;this.h=h;Object.assign(this.camera,{left:0,right:w,top:h,bottom:0,near:0.1,far:100});this.camera.position.z=10;this.camera.updateProjectionMatrix();this.cache=''}draw(lines,buttons){const key=JSON.stringify([lines,buttons]);if(key===this.cache)return;this.cache=key;dispose(this.group);this.buttons=buttons;for(const a of [...lines,...buttons]){const mesh=label(a.text,a.w,a.h,a.size||24,a.bg||'#193a3d');mesh.position.set(a.x,this.h-a.y,0);this.group.add(mesh)}}hit(x,y){return this.buttons.find(b=>Math.abs(x-b.x)<b.w/2&&Math.abs(y-b.y)<b.h/2)}}
+

@@ -1,0 +1,14 @@
+const fs=require('fs'),vm=require('vm'),assert=require('assert/strict'),path=require('path');
+const handlers={},canvasHandlers={},listen=(map)=>(name,fn)=>map[name]=fn;
+global.window={addEventListener:listen(handlers)};global.document={addEventListener:listen(handlers)};
+vm.runInThisContext(fs.readFileSync(path.join(__dirname,'../src/controls.js'),'utf8'));
+const calls=[],game={state:'PLAYING',action:i=>calls.push(['act',i]),drop:i=>calls.push(['drop',i])},view={W:1000,H:800,buttons:[{kind:'stick',player:0,x:100,y:700,w:140,h:140},{kind:'stick',player:1,x:600,y:700,w:140,h:140},{kind:'act',player:1,x:800,y:700,w:100,h:100}]};
+const canvas={addEventListener:listen(canvasHandlers),setPointerCapture(){},getBoundingClientRect(){return {left:0,top:0,width:1000,height:800}}};
+const input=window.attachControls(canvas,game,view,id=>calls.push(['command',id]));
+const ev=(id,x,y)=>({pointerId:id,clientX:x,clientY:y,preventDefault(){}});
+canvasHandlers.pointerdown(ev(10,100,700));canvasHandlers.pointerdown(ev(20,600,700));canvasHandlers.pointermove(ev(10,155,700));canvasHandlers.pointermove(ev(20,600,645));assert.deepEqual(input.axes(),[[1,0],[0,-1]]);
+canvasHandlers.pointerdown(ev(30,800,700));assert.deepEqual(calls.pop(),['act',1]);assert.equal(input.sticks[0].id,10);assert.equal(input.sticks[1].id,20);
+canvasHandlers.pointercancel(ev(10,0,0));assert.equal(input.sticks[0].x,0);assert.equal(input.sticks[1].y,-1);canvasHandlers.lostpointercapture(ev(20,0,0));assert.equal(input.sticks[1].y,0);
+for(const code of ['KeyW','ArrowRight','KeyF','KeyG','Enter','ShiftRight'])handlers.keydown({code,repeat:false,preventDefault(){}});assert.deepEqual(input.axes(),[[0,-1],[1,0]]);assert.deepEqual(calls,[['act',0],['drop',0],['act',1],['drop',1]]);
+handlers.blur();assert(input.paused);assert.deepEqual(input.axes(),[[0,0],[0,0]]);input.resume();assert(!input.paused);
+console.log('PASS independent simultaneous pointers, third-finger action, cancel/lostcapture, exact PC mappings, blur/pause/resume');

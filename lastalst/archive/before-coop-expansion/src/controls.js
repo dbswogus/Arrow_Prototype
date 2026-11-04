@@ -1,0 +1,14 @@
+(function(){'use strict';
+window.attachControls=function(canvas,game,view,command){const keys=new Set(),sticks=[{x:0,y:0,id:null},{x:0,y:0,id:null}],pointers=new Map();let suspended=false;
+ const clear=()=>{keys.clear();pointers.clear();sticks.forEach(s=>{s.x=s.y=0;s.id=null})};
+ const point=e=>{const b=canvas.getBoundingClientRect();return {x:(e.clientX-b.left)/b.width*view.W,y:(e.clientY-b.top)/b.height*view.H}};
+ const used=['KeyW','KeyA','KeyS','KeyD','KeyF','KeyG','ArrowUp','ArrowDown','ArrowLeft','ArrowRight','Enter','ShiftRight'];
+ window.addEventListener('keydown',e=>{if(!used.includes(e.code))return;e.preventDefault();keys.add(e.code);if(e.repeat||suspended)return;if(game.state!=='PLAYING'){if(e.code==='Enter')command(game.state==='TITLE'?'tutorial':'play');return}if(e.code==='KeyF')game.action(0);if(e.code==='KeyG')game.drop(0);if(e.code==='Enter')game.action(1);if(e.code==='ShiftRight')game.drop(1)});
+ window.addEventListener('keyup',e=>{keys.delete(e.code);if(used.includes(e.code))e.preventDefault()});
+ canvas.addEventListener('pointerdown',e=>{e.preventDefault();const p=point(e);canvas.setPointerCapture(e.pointerId);const hit=view.buttons.find(b=>Math.abs(p.x-b.x)<=b.w/2&&Math.abs(p.y-b.y)<=b.h/2);if(hit){if(hit.kind==='stick'&&!suspended){const s=sticks[hit.player];if(s.id!==null)return;s.id=e.pointerId;pointers.set(e.pointerId,{player:hit.player,cx:hit.x,cy:hit.y});s.x=Math.max(-1,Math.min(1,(p.x-hit.x)/55));s.y=Math.max(-1,Math.min(1,(p.y-hit.y)/55))}else if(hit.id==='resume')command('resume');else if(!suspended){if(hit.kind==='act')game.action(hit.player);else if(hit.kind==='drop')game.drop(hit.player);else command(hit.id)}}});
+ canvas.addEventListener('pointermove',e=>{const bind=pointers.get(e.pointerId);if(!bind)return;const p=point(e),s=sticks[bind.player];const dx=(p.x-bind.cx)/55,dy=(p.y-bind.cy)/55,n=Math.max(1,Math.hypot(dx,dy));s.x=dx/n;s.y=dy/n});
+ const end=e=>{const bind=pointers.get(e.pointerId);if(bind){const s=sticks[bind.player];s.x=s.y=0;s.id=null;pointers.delete(e.pointerId)}};for(const type of ['pointerup','pointercancel','lostpointercapture'])canvas.addEventListener(type,end);
+ window.addEventListener('blur',()=>{clear();if(game.state==='PLAYING')suspended=true});document.addEventListener('visibilitychange',()=>{if(document.hidden){clear();if(game.state==='PLAYING')suspended=true}});
+ return {sticks,clear,get paused(){return suspended},resume(){clear();suspended=false},axes(){return [[(keys.has('KeyD')?1:0)-(keys.has('KeyA')?1:0)+sticks[0].x,(keys.has('KeyS')?1:0)-(keys.has('KeyW')?1:0)+sticks[0].y],[(keys.has('ArrowRight')?1:0)-(keys.has('ArrowLeft')?1:0)+sticks[1].x,(keys.has('ArrowDown')?1:0)-(keys.has('ArrowUp')?1:0)+sticks[1].y]]}};
+};
+})();

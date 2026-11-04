@@ -1,0 +1,2 @@
+export const locations=[{id:'wood',x:-6,z:-3,label:'재료 창고 · 몸체',color:0xdab581},{id:'horn',x:-6,z:2,label:'재료 창고 · 뿔',color:0xefdabb},{id:0,x:-2.5,z:-2,label:'① 몸체 · 5초',color:0x5f9e95},{id:1,x:1.5,z:1.8,label:'② 결합 · 6초',color:0xe3a559},{id:2,x:5,z:-2,label:'③ 마감 · 4초',color:0x8a91ba},{id:'ship',x:6,z:3.5,label:'출고 · +100',color:0x78ac6f}];
+export function nearest(player){return locations.reduce((best,p)=>{const d=Math.hypot(player.x-p.x,player.z-p.z);return d<2.25&&(!best||d<best.d)?{...p,d}:best},null)}

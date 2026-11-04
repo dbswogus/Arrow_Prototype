@@ -1,0 +1,52 @@
+/* Offline, engine-free game rules. All craft timing and quality systems are game abstractions. */
+(function(root){'use strict';
+const names={wood:'몸체 재료',horn:'뿔 재료',body:'활 몸체',joined:'결합 몸체',dried:'건조 몸체',bow:'완성 활'};
+const benches=[
+ {id:'wood',x:-7.2,z:-3.7,label:'몸체 창고',color:'#bc9366'},
+ {id:'horn',x:-7.2,z:3.7,label:'뿔 창고',color:'#d7be89'},
+ {id:0,x:-3.4,z:-3.7,label:'① 몸체 가공 · 5초',color:'#4eaaa1'},
+ {id:1,x:-3.4,z:3.7,label:'② 뿔 결합 · 6초',color:'#e1a449'},
+ {id:2,x:7.2,z:-3.7,label:'④ 마감 · 4초',color:'#9994ca'},
+ {id:'ship',x:7.2,z:3.7,label:'출고 · 100~150점',color:'#79a763'}];
+const props=[{id:'dry',x:0,z:0,w:2.2,d:4.2,label:'③ 건조대 · 6초'},
+ {id:'shelf',x:-3.5,z:0,w:1.4,d:.9,label:'전달 선반'},
+ {id:'divider',x:3.25,z:0,w:.9,d:3.4,label:'도구 보관대'}];
+const radius=.43,speed=4.2,orderDuration=45,orderYearDays=365;
+function cargo(p){return {type:p.held,quality:p.quality||0,polished:!!p.polished}}
+function clearHand(p){p.held=null;p.quality=0;p.polished=false;p.polish=null}
+function give(p,item){p.held=item.type;p.quality=item.quality||0;p.polished=!!item.polished;p.polish=null}
+class Game{
+ constructor(){this.reset();this.state='TITLE'}
+ reset(){this.time=180;this.score=0;this.delivered=0;this.expired=0;this.collisions=0;this.orders=[orderDuration];this.dropped=[];this.shelf=null;this.dry={state:'idle',t:0,duration:6,turned:false,item:null};this.effects=[];this.effectId=0;this.handoffs=0;this.qualityBows=0;this.streak=0;this.bestStreak=0;this.bestBow=0;
+ this.players=[{x:-5,z:-1.4},{x:5,z:1.4}].map((v,i)=>({...v,vx:0,vz:0,held:null,quality:0,polished:false,polish:null,fallen:0,guard:0,face:{x:i?-1:1,z:0},message:i?'방향키 / Enter / 오른쪽 Shift':'WASD / F / G',notice:0}));
+ this.stations=[5,6,4].map((duration,i)=>({state:'idle',input:null,t:0,duration,output:['body','joined','bow'][i],item:null}));}
+ start(){this.reset();this.state='PLAYING'}
+ say(p,message){p.message=message;p.notice=3}
+ solid(x,z){return benches.some(b=>Math.abs(x-b.x)<1.16&&Math.abs(z-b.z)<.76)||props.some(b=>Math.abs(x-b.x)<b.w/2&&Math.abs(z-b.z)<b.d/2)}
+ valid(x,z){return Math.abs(x)<=8.5&&Math.abs(z)<=5.3&&!benches.some(b=>Math.abs(x-b.x)<1.16+radius&&Math.abs(z-b.z)<.76+radius)&&!props.some(b=>Math.abs(x-b.x)<b.w/2+radius&&Math.abs(z-b.z)<b.d/2+radius)}
+ move(p,dx,dz,dt){p.vx=p.vz=0;if(p.fallen||p.polish)return;const n=Math.max(1,Math.hypot(dx,dz));dx/=n;dz/=n;if(dx||dz){const f=Math.hypot(dx,dz);p.face={x:dx/f,z:dz/f}}const ox=p.x,oz=p.z,x=ox+dx*speed*dt,z=oz+dz*speed*dt;if(this.valid(x,p.z))p.x=x;if(this.valid(p.x,z))p.z=z;p.vx=(p.x-ox)/dt;p.vz=(p.z-oz)/dt}
+ drop(i,crash=false){const p=this.players[i];if(this.state!=='PLAYING'||(!crash&&p.fallen)||!p.held)return;let x=p.x+p.face.x*.65,z=p.z+p.face.z*.65;if(!this.valid(x,z)){x=p.x;z=p.z}this.dropped.push({...cargo(p),x,z});clearHand(p);if(!crash)this.say(p,'바닥에 놓았어요. 파트너도 집을 수 있어요')}
+ collide(){const [a,b]=this.players,dx=b.x-a.x,dz=b.z-a.z,d=Math.hypot(dx,dz);if(d>=radius*2)return;const nx=d<.0001?1:dx/d,nz=d<.0001?0:dz/d,approach=(a.vx-b.vx)*nx+(a.vz-b.vz)*nz;if(approach>3&&!a.guard&&!b.guard&&!a.fallen&&!b.fallen){this.collisions++;this.players.forEach((p,i)=>{p.fallen=.7;p.guard=1.7;this.drop(i,true);this.say(p,'쿵! 물건을 다시 주워요')})}const push=(radius*2-d)/2+.002;for(const [p,s]of [[a,-1],[b,1]]){if(this.valid(p.x+s*nx*push,p.z))p.x+=s*nx*push;if(this.valid(p.x,p.z+s*nz*push))p.z+=s*nz*push}}
+ visible(p,b){for(let t=.12;t<1;t+=.1)if(this.solid(p.x+(b.x-p.x)*t,p.z+(b.z-p.z)*t))return false;return true}
+ focus(i){const p=this.players[i],options=[...benches,...props.filter(b=>b.id!=='divider')];return options.map(b=>({...b,d:Math.hypot(p.x-b.x,p.z-b.z)})).filter(b=>b.d<(b.id==='dry'?2.65:2.25)).sort((a,b)=>a.d-b.d)[0]||null}
+ handoff(i){const p=this.players[i],other=this.players[1-i];if(!p.held||other.held||p.fallen||other.fallen||p.polish||other.polish)return false;const dx=other.x-p.x,dz=other.z-p.z,d=Math.hypot(dx,dz);if(d<.5||d>1.55||(p.face.x*dx+p.face.z*dz)/d<.55||(-other.face.x*dx-other.face.z*dz)/d<.25||!this.visible(p,other))return false;give(other,cargo(p));clearHand(p);this.handoffs++;this.say(p,'파트너에게 건넸어요');this.say(other,'재료를 받았어요!');return true}
+ polishMarker(p){return p.polish?1-Math.abs((p.polish.t%2)-1):0}
+ finishPolish(p){if(!p.polish)return;const marker=this.polishMarker(p),success=p.polish.t>=.3&&Math.abs(marker-.5)<=.13;if(success)p.quality=Math.min(50,p.quality+25);p.polish=null;this.say(p,success?'추가 마감 성공! +25점 품질':'기본 품질 유지! 바로 납품해도 좋아요')}
+ action(i){if(this.state!=='PLAYING')return;const p=this.players[i];if(p.fallen)return;if(p.polish){this.finishPolish(p);return}if(this.handoff(i))return;
+ if(!p.held){let best=-1,d=1.1;this.dropped.forEach((item,j)=>{const n=Math.hypot(item.x-p.x,item.z-p.z);if(n<d){d=n;best=j}});if(best>=0){give(p,this.dropped.splice(best,1)[0]);this.say(p,names[p.held]+' 회수');return}}
+ const b=this.focus(i);if(!b){this.say(p,'파트너나 작업대 가까이 이동하세요');return}this.actAt(i,b.id)}
+ actAt(i,id){if(this.state!=='PLAYING')return false;const p=this.players[i];if(p.fallen)return false;const fail=s=>{this.say(p,s);return false};
+ if(id==='wood'||id==='horn'){if(p.held)return fail('손에는 하나만 들 수 있어요');give(p,{type:id});this.say(p,names[id]+' 집기');return true}
+ if(id==='shelf'){if(p.held&&this.shelf)return fail('선반이 가득 찼어요');if(p.held){this.shelf=cargo(p);clearHand(p);this.say(p,'전달 선반에 맡겼어요');return true}if(!this.shelf)return fail('선반이 비어 있어요');give(p,this.shelf);this.shelf=null;this.say(p,'선반에서 받았어요');return true}
+ if(id==='dry'){const s=this.dry;if(s.state==='processing'){if(p.held)return fail('빈손으로 건조대 뒤집기를 도와주세요');if(s.turned)return fail('뒤집기 완료! 잠시 기다려요');if(s.t<2-1e-7)return fail('노란 표시가 뜨면 한 번 뒤집어요');if(s.t>4.5+1e-7)return fail('뒤집을 시기가 지났어요. 기본 품질로 완성돼요');s.turned=true;this.say(p,'뒤집기 성공! 품질 +25');return true}if(s.state==='ready'){if(p.held)return fail('빈손으로 건조 몸체를 집으세요');give(p,{type:'dried',quality:s.turned?25:0});s.state='idle';s.item=null;this.say(p,s.turned?'정성 건조 완료!':'건조 완료! 기본 품질');return true}if(p.held!=='joined')return fail('결합 몸체를 건조대에 걸어요');s.item=cargo(p);clearHand(p);s.state='processing';s.t=0;s.turned=false;this.say(p,'건조 시작! 중간에 노란 표시를 확인해요');return true}
+ if(id==='ship'){if(p.held!=='bow')return fail('완성 활만 출고할 수 있어요');if(!this.orders.length)return fail('남은 주문이 없어요');const value=100+(p.quality||0);this.orders.shift();this.score+=value;this.delivered++;this.streak++;this.bestStreak=Math.max(this.bestStreak,this.streak);this.bestBow=Math.max(this.bestBow,value);if(p.quality)this.qualityBows++;this.effects.push({id:++this.effectId,type:'delivery',value,life:2.5,x:7.2,z:3.7});clearHand(p);if(this.time>20)this.orders.push(orderDuration);this.say(p,`포장·납품 완료! +${value}점`);return true}
+ const s=this.stations[id];if(!s)return false;
+ if(id===2&&p.held==='bow'){if(p.polished)return fail('추가 마감은 한 번만! 이제 출고해요');p.polished=true;p.polish={t:0};this.say(p,'표시가 초록 구간에 오면 행동!');return true}
+ if(s.state==='processing')return fail('작업 중! 건조대나 파트너를 도와주세요');if(s.state==='ready'){if(p.held)return fail('빈손으로 결과물을 집으세요');give(p,{type:s.output,quality:s.item?.quality||0});s.state='idle';s.input=null;s.item=null;s.t=0;this.say(p,names[p.held]+' 완성!');return true}
+ const expected=id===0?'wood':id===1?(s.input?'horn':'body'):'dried';if(p.held!==expected)return fail('필요한 물건: '+names[expected]);const item=cargo(p);clearHand(p);if(id===1&&!s.input){s.input='body';this.say(p,'활 몸체 투입! 뿔 재료도 넣어요');return true}s.item=item;s.state='processing';s.t=0;this.say(p,'작업 시작! 다른 일을 도와주세요');return true}
+ tick(dt,axes=[[0,0],[0,0]]){if(this.state!=='PLAYING'||dt<=0)return;let left=Math.min(dt,this.time);while(left>1e-7){const h=Math.min(left,1/120);this.players.forEach((p,i)=>{p.fallen=Math.max(0,p.fallen-h);p.guard=Math.max(0,p.guard-h);p.notice=Math.max(0,p.notice-h);if(p.polish){p.polish.t+=h;if(p.polish.t>=3){p.polish=null;this.say(p,'추가 마감 종료! 기본 품질 유지')}}this.move(p,...axes[i],h)});this.collide();this.stations.forEach(s=>{if(s.state==='processing'){s.t=Math.min(s.duration,s.t+h);if(s.t>=s.duration-1e-7)s.state='ready'}});const s=this.dry;if(s.state==='processing'){s.t=Math.min(s.duration,s.t+h);if(s.t>=s.duration-1e-7)s.state='ready'}this.effects=this.effects.map(e=>({...e,life:e.life-h})).filter(e=>e.life>0);this.time=Math.max(0,this.time-h);this.orders=this.orders.map(t=>t-h).filter(t=>{if(t<=0){this.expired++;this.streak=0;return false}return true});while(this.orders.length<1&&this.time>20)this.orders.push(orderDuration);left-=h}if(this.time<1e-6){this.time=0;this.state='RESULT';this.players.forEach(p=>p.polish=null)}}
+}
+root.Workshop={Game,names,benches,props,radius,orderDuration,orderYearDays};
+})(typeof globalThis!=='undefined'?globalThis:this);
+
+
