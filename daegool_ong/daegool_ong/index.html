@@ -14,7 +14,7 @@
   </style>
 </head>
 <body>
-<canvas id="game" tabindex="0" aria-label="데굴데굴 옹기 3D 탑뷰 게임. 화면 오른쪽 아래 조이스틱 또는 키보드 화살표로 움직이세요. 구멍과 움직이는 장애물을 피하세요."></canvas>
+<canvas id="game" tabindex="0" aria-label="데굴데굴 옹기 3D 탑뷰 게임. 화면 가운데 아래 조이스틱 또는 키보드 화살표로 움직이세요. 구멍과 움직이는 장애물을 피하세요."></canvas>
 <p id="error" role="alert">WebGL을 시작하지 못했어요. 브라우저의 하드웨어 가속 설정을 확인하고 최신 브라우저에서 다시 열어 주세요.</p>
 <script>
 'use strict';
@@ -120,7 +120,7 @@ let layout={x:0,y:0,w:1600,h:1000,dpr:1};
 let last=0,acc=0,dirty=true,contextLost=false,portrait=false,storyIndex=0,simulationTime=0,fallTime=0,falling=false,failures=0,fallReason='',invulnerable=0;
 let checkpoint={x:-7,z:-4.8,index:-1,level:0},crumbles=[],floorLevel=0,py=0;
 const pointers=new Map(),keys=new Set();let buttons=[];
-const STICK_LIMIT=LIMIT,stick={id:null,x:0,y:0,cx:1340,cy:850,r:90};
+const STICK_LIMIT=LIMIT,stick={id:null,x:0,y:0,cx:800,cy:850,r:90};
 function input(){let x=-stick.x,z=stick.y;const length=Math.hypot(x,z);if(length<=.12){x=z=0;}else{const strength=clamp((length-.12)/.88,0,1);x=x/length*strength;z=z/length*strength;}if(keys.size){x=(keys.has('ArrowLeft')?1:0)-(keys.has('ArrowRight')?1:0);z=(keys.has('ArrowDown')?1:0)-(keys.has('ArrowUp')?1:0);const n=Math.hypot(x,z);if(n>1){x/=n;z/=n;}}return {x,z};}
 function releaseStick(){stick.id=null;stick.x=stick.y=0;dirty=true;}
 function clearInput(){pointers.clear();keys.clear();releaseStick();dirty=true;}
@@ -178,14 +178,14 @@ const STORY=[
  {tag:'너와 함께하는 작은 모험',title:'길을 조금 기울여 줄래?',lines:['굽은 공방 길과 가마 앞을 지나 전시실로 가요.','급할 땐 천천히. 떨어져도 안전 지점에서 다시!'],quote:'“우리, 함께 집으로 가자!”'}
 ];
 function drawStory(){header();const item=STORY[storyIndex];label(`STORY ${storyIndex+1} / 3  ·  ${item.tag}`,100,190);text(item.title,100,285,51,C.ink,800);item.lines.forEach((t,i)=>text(t,102,393+i*49,25,C.muted));fillRound(100,548,782,100,'#e6ebd8',22);text(item.quote,491,598,30,C.green,700,'center');fillRound(1000,200,480,520,'#e5e8d5',200);text('작은 옹기의 귀가 이야기',1240,751,21,C.muted,500,'center');for(let i=0;i<3;i++){ctx.fillStyle=i===storyIndex?C.green:'#ced6bf';ctx.beginPath();ctx.arc(1210+i*30,790,6,0,TAU);ctx.fill();}text('이야기 속 5분이에요. 시간 초과로 실패하지 않아요.',100,945,18,C.muted);btn('story-next',1080,840,420,80,storyIndex<2?'다음 이야기  →':'공방으로 출발!  →',true);}
-function drawBrief(){header();const st=STAGES[stage];label(st.tag+'',100,179);text(st.name+'에 도착했어요',100,260,52,C.ink,800);text(st.quote,102,352,25,C.green,600);fillRound(100,427,850,236,C.paper,26);label('이번 길의 목표',135,473);text(st.mission,135,528,32,C.ink,800);text(stage===0?'넓은 작업 마당에서 방향을 바꿔 지그재그로 돌아가요.':stage===1?'두 가마 사이 다리를 번갈아 건너요. 도구가 비킬 때 출발!':'바깥 전시 통로를 돌아, 마지막에 중앙 전시대로 들어가요.',135,595,21,C.muted);fillRound(1050,232,420,450,'#e5e8d5',190);text(stage===0?'작업 마당 + 지그재그':stage===1?'두 가마 + 세 나무 다리':'큰 순환 통로 → 중앙 전시대',1260,729,23,C.green,700,'center');btn('begin',1080,840,420,80,'조심조심 출발!  →',true);text('오른쪽 조이스틱으로 기울여요. 놓으면 각도가 유지돼요.',100,912,20,C.muted);}
+function drawBrief(){header();const st=STAGES[stage];label(st.tag+'',100,179);text(st.name+'에 도착했어요',100,260,52,C.ink,800);text(st.quote,102,352,25,C.green,600);fillRound(100,427,850,236,C.paper,26);label('이번 길의 목표',135,473);text(st.mission,135,528,32,C.ink,800);text(stage===0?'넓은 작업 마당에서 방향을 바꿔 지그재그로 돌아가요.':stage===1?'두 가마 사이 다리를 번갈아 건너요. 도구가 비킬 때 출발!':'바깥 전시 통로를 돌아, 마지막에 중앙 전시대로 들어가요.',135,595,21,C.muted);fillRound(1050,232,420,450,'#e5e8d5',190);text(stage===0?'작업 마당 + 지그재그':stage===1?'두 가마 + 세 나무 다리':'큰 순환 통로 → 중앙 전시대',1260,729,23,C.green,700,'center');btn('begin',1080,840,420,80,'조심조심 출발!  →',true);text('가운데 아래 조이스틱으로 기울여요. 놓으면 각도가 유지돼요.',100,912,20,C.muted);}
 function drawJoystick(){ctx.fillStyle='#e9ecdf';ctx.beginPath();ctx.arc(stick.cx,stick.cy,110,0,TAU);ctx.fill();ctx.strokeStyle='#a5b499';ctx.lineWidth=3;ctx.beginPath();ctx.arc(stick.cx,stick.cy,stick.r,0,TAU);ctx.stroke();line(stick.cx-65,stick.cy,stick.cx+65,stick.cy,'#c6cfb9',2);line(stick.cx,stick.cy-65,stick.cx,stick.cy+65,'#c6cfb9',2);ctx.fillStyle=stick.id===null?C.green:C.dark;ctx.beginPath();ctx.arc(stick.cx+stick.x*stick.r*.68,stick.cy+stick.y*stick.r*.68,36,0,TAU);ctx.fill();text('밀어서 움직이기',stick.cx,978,18,C.green,700,'center');}
 function drawPlay(){
  for(let i=0;i<STAGES.length;i++){const x=1065+i*120;fillRound(x,43,112,46,i===stage?C.green:'#e7e9dc',23);text((i<stage?'✓ ':'')+STAGES[i].name,x+56,66,16,i===stage?'#fff':C.muted,700,'center');}
  text('재도전 '+failures+'회  ·  '+(checkpoint.index>=0?'안전 지점 저장됨':'출발 지점에서 재시작'),1535,132,19,C.muted,500,'right');
  if(toastTime>0){fillRound(64,42,940,54,C.paper,27);text(toast,534,69,22,falling?C.orange:C.green,700,'center');}
  drawJoystick();
- ctx.strokeStyle='#cbd5bd';ctx.lineWidth=3;ctx.beginPath();ctx.arc(800,845,61,0,TAU);ctx.stroke();line(739,845,861,845,'#d5dcc8',2);line(800,784,800,906,'#d5dcc8',2);ctx.fillStyle=C.green;ctx.beginPath();ctx.arc(800-angle/STICK_LIMIT*53,845+tiltZ/STICK_LIMIT*53,9,0,TAU);ctx.fill();text('기울기 '+Math.round(Math.hypot(angle,tiltZ)*180/Math.PI)+'°',800,934,22,C.green,700,'center');
+ ctx.strokeStyle='#cbd5bd';ctx.lineWidth=3;ctx.beginPath();ctx.arc(1340,845,61,0,TAU);ctx.stroke();line(1279,845,1401,845,'#d5dcc8',2);line(1340,784,1340,906,'#d5dcc8',2);ctx.fillStyle=C.green;ctx.beginPath();ctx.arc(1340-angle/STICK_LIMIT*53,845+tiltZ/STICK_LIMIT*53,9,0,TAU);ctx.fill();text('기울기 '+Math.round(Math.hypot(angle,tiltZ)*180/Math.PI)+'°',1340,934,22,C.green,700,'center');
  if(done){fillRound(450,333,700,216,C.paper,30);text(stage===STAGES.length-1?'내 전시대 도착!':'이 길 통과!',800,403,48,C.green,800,'center');text(stage===STAGES.length-1?'이제 친구들을 만날 준비가 됐어요.':'다음 공간으로 함께 가요.',800,477,25,C.muted,500,'center');}
 }
 function drawFinish(){header();label('WELCOME HOME',100,165);text('내 자리로 돌아왔어요!',100,237,54,C.ink,800);text('길을 기울이고 속도를 조절해 준 덕분이에요.',102,314,26,C.muted);fillRound(100,382,650,360,'#e8ecda',28);text('공방 ✓     가마 앞 ✓     전시실 ✓',425,440,21,C.green,700,'center');text(COLLECTION[selected].name+' · 재도전 '+failures+'회',425,513,31,C.ink,800,'center');text('사진 속 진짜 옹기는 곧 만나요.',425,577,24,C.muted,500,'center');text('공식 명칭 · 쓰임 · 사진 · 출처 확인 예정',425,625,20,C.muted,500,'center');text('게임 캐릭터는 실물의 정확한 복원이 아닙니다.',425,687,17,C.muted,400,'center');photoPlaceholder(900,382,570,360,selected);btn('replay',100,825,390,80,'한 번 더 도와주기  ↻',true);btn('select',520,825,280,80,'다른 옹기 만나기');text('부천시박물관 옹기 소장품을 소재로 한 체험 게임',1500,949,18,C.muted,500,'right');}
