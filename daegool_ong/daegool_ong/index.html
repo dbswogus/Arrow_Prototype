@@ -1,0 +1,239 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+  <meta name="theme-color" content="#f4ecda">
+  <title>데굴데굴 옹기 · 내 자리로 돌아가는 길</title>
+  <style>
+    * { box-sizing:border-box; }
+    html,body { width:100%;height:100%;margin:0;overflow:hidden;background:#292f2a; }
+    body { display:flex;align-items:center;justify-content:center; }
+    canvas { display:block;width:100%;height:100%;object-fit:contain;touch-action:none;outline:none; }
+    #error { display:none;padding:32px;color:#fff;font:20px/1.7 sans-serif;max-width:650px; }
+  </style>
+</head>
+<body>
+<canvas id="game" tabindex="0" aria-label="데굴데굴 옹기 3D 탑뷰 게임. 화면의 네 방향 버튼 또는 키보드 화살표로 판을 기울이세요. 구멍과 움직이는 장애물을 피하세요."></canvas>
+<p id="error" role="alert">WebGL을 시작하지 못했어요. 브라우저의 하드웨어 가속 설정을 확인하고 최신 브라우저에서 다시 열어 주세요.</p>
+<script>
+'use strict';
+(() => {
+const canvas=document.getElementById('game');
+const gl=canvas.getContext('webgl',{alpha:false,antialias:true,preserveDrawingBuffer:false});
+if(!gl){canvas.style.display='none';document.getElementById('error').style.display='block';return;}
+
+// This build deliberately has no network or external-library dependency.
+// UI is drawn to an unmounted texture source and composited inside the sole WebGL canvas.
+const W=1600,H=1000,TAU=Math.PI*2,LIMIT=25*Math.PI/180;
+const C={ink:'#344638',muted:'#788271',green:'#466744',dark:'#2f4932',cream:'#f5efdf',line:'#d9ddca',orange:'#c57c4b',paper:'#fffcf3'};
+const ui=document.createElement('canvas');ui.width=W;ui.height=H;
+const ctx=ui.getContext('2d');
+const clamp=(x,a,b)=>Math.max(a,Math.min(b,x));
+const mix=(a,b,t)=>a+(b-a)*t;
+const rgb=h=>[parseInt(h.slice(1,3),16)/255,parseInt(h.slice(3,5),16)/255,parseInt(h.slice(5,7),16)/255];
+const identity=()=>new Float32Array([1,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1]);
+function mul(a,b){const o=new Float32Array(16);for(let c=0;c<4;c++)for(let r=0;r<4;r++)for(let k=0;k<4;k++)o[c*4+r]+=a[k*4+r]*b[c*4+k];return o;}
+function translate(x,y,z){const m=identity();m[12]=x;m[13]=y;m[14]=z;return m;}
+function scale(x,y,z){const m=identity();m[0]=x;m[5]=y;m[10]=z;return m;}
+function rz(a){const m=identity(),c=Math.cos(a),s=Math.sin(a);m[0]=c;m[1]=s;m[4]=-s;m[5]=c;return m;}
+function rx(a){const m=identity(),c=Math.cos(a),s=Math.sin(a);m[5]=c;m[6]=s;m[9]=-s;m[10]=c;return m;}
+function ry(a){const m=identity(),c=Math.cos(a),s=Math.sin(a);m[0]=c;m[2]=-s;m[8]=s;m[10]=c;return m;}
+function ortho(l,r,b,t,n,f){const m=identity();m[0]=2/(r-l);m[5]=2/(t-b);m[10]=-2/(f-n);m[12]=-(r+l)/(r-l);m[13]=-(t+b)/(t-b);m[14]=-(f+n)/(f-n);return m;}
+function shader(type,src){const s=gl.createShader(type);gl.shaderSource(s,src);gl.compileShader(s);if(!gl.getShaderParameter(s,gl.COMPILE_STATUS))throw Error(gl.getShaderInfoLog(s));return s;}
+function program(v,f){const p=gl.createProgram();gl.attachShader(p,shader(gl.VERTEX_SHADER,v));gl.attachShader(p,shader(gl.FRAGMENT_SHADER,f));gl.linkProgram(p);if(!gl.getProgramParameter(p,gl.LINK_STATUS))throw Error(gl.getProgramInfoLog(p));return p;}
+const p3=program(`attribute vec3 position;attribute vec3 normal;uniform mat4 mvp;uniform mat4 model;varying float light;void main(){vec3 n=normalize(mat3(model)*normal);light=.61+.39*max(dot(n,normalize(vec3(-.4,.8,1.))),0.);gl_Position=mvp*vec4(position,1.);}`,`precision mediump float;uniform vec3 color;varying float light;void main(){gl_FragColor=vec4(color*light,1.);}`);
+const pu=program(`attribute vec2 position;varying vec2 uv;void main(){uv=vec2((position.x+1.)*.5,(1.-position.y)*.5);gl_Position=vec4(position,0.,1.);}`,`precision mediump float;uniform sampler2D image;varying vec2 uv;void main(){gl_FragColor=texture2D(image,uv);}`);
+const loc={pos:gl.getAttribLocation(p3,'position'),normal:gl.getAttribLocation(p3,'normal'),mvp:gl.getUniformLocation(p3,'mvp'),model:gl.getUniformLocation(p3,'model'),color:gl.getUniformLocation(p3,'color')};
+const quad=gl.createBuffer();gl.bindBuffer(gl.ARRAY_BUFFER,quad);gl.bufferData(gl.ARRAY_BUFFER,new Float32Array([-1,-1,1,-1,-1,1,-1,1,1,-1,1,1]),gl.STATIC_DRAW);
+const tex=gl.createTexture();gl.bindTexture(gl.TEXTURE_2D,tex);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.LINEAR);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,gl.LINEAR);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_S,gl.CLAMP_TO_EDGE);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_T,gl.CLAMP_TO_EDGE);
+function mesh(v,n){const b=gl.createBuffer();gl.bindBuffer(gl.ARRAY_BUFFER,b);gl.bufferData(gl.ARRAY_BUFFER,new Float32Array(v),gl.STATIC_DRAW);const nb=gl.createBuffer();gl.bindBuffer(gl.ARRAY_BUFFER,nb);gl.bufferData(gl.ARRAY_BUFFER,new Float32Array(n),gl.STATIC_DRAW);return {b,nb,count:v.length/3};}
+function boxMesh(){const v=[],n=[];const faces=[[[1,0,0],[[1,-1,-1],[1,1,-1],[1,1,1],[1,-1,1]]],[[-1,0,0],[[-1,-1,1],[-1,1,1],[-1,1,-1],[-1,-1,-1]]],[[0,1,0],[[-1,1,-1],[-1,1,1],[1,1,1],[1,1,-1]]],[[0,-1,0],[[-1,-1,1],[-1,-1,-1],[1,-1,-1],[1,-1,1]]],[[0,0,1],[[-1,-1,1],[1,-1,1],[1,1,1],[-1,1,1]]],[[0,0,-1],[[1,-1,-1],[-1,-1,-1],[-1,1,-1],[1,1,-1]]]];for(const [norm,pts]of faces)for(const i of[0,1,2,0,2,3]){v.push(...pts[i].map(x=>x*.5));n.push(...norm);}return mesh(v,n);}
+function lathe(profile){const v=[],n=[],N=48;for(let j=0;j<profile.length-1;j++){const [r0,y0]=profile[j],[r1,y1]=profile[j+1],len=Math.hypot(y1-y0,r1-r0)||1;for(let i=0;i<N;i++){const a=i*TAU/N,b=(i+1)*TAU/N;for(const [r,y,t]of[[r0,y0,a],[r1,y1,a],[r1,y1,b],[r0,y0,a],[r1,y1,b],[r0,y0,b]]){v.push(r*Math.cos(t),y,r*Math.sin(t));n.push((y1-y0)*Math.cos(t)/len,-(r1-r0)/len,(y1-y0)*Math.sin(t)/len);}}}return mesh(v,n);}
+const cube=boxMesh();
+const pots=[
+  lathe([[0,-.62],[.36,-.62],[.48,-.46],[.62,-.12],[.61,.20],[.49,.45],[.35,.53],[.36,.62],[.27,.62],[.27,.52],[.29,.48]]),
+  lathe([[0,-.62],[.32,-.62],[.40,-.46],[.48,.02],[.43,.35],[.28,.51],[.28,.68],[.21,.68],[.21,.50]]),
+  lathe([[0,-.51],[.37,-.51],[.58,-.34],[.69,-.02],[.62,.25],[.49,.39],[.50,.49],[.39,.49],[.39,.36]])
+];
+const lids=lathe([[0,0],[.37,0],[.40,.06],[.32,.13],[.10,.17],[.08,.25],[0,.25]]);
+const potColors=['#915432','#78452e','#ab7046'];
+let vp=identity();
+function draw(m,mat,col){gl.useProgram(p3);gl.bindBuffer(gl.ARRAY_BUFFER,m.b);gl.enableVertexAttribArray(loc.pos);gl.vertexAttribPointer(loc.pos,3,gl.FLOAT,false,0,0);gl.bindBuffer(gl.ARRAY_BUFFER,m.nb);gl.enableVertexAttribArray(loc.normal);gl.vertexAttribPointer(loc.normal,3,gl.FLOAT,false,0,0);gl.uniformMatrix4fv(loc.mvp,false,mul(vp,mat));gl.uniformMatrix4fv(loc.model,false,mat);gl.uniform3fv(loc.color,rgb(col));gl.drawArrays(gl.TRIANGLES,0,m.count);}
+function block(parent,x,y,z,sx,sy,sz,color,ang=0){draw(cube,mul(parent,mul(translate(x,y,z),mul(rz(ang),scale(sx,sy,sz)))),color);}
+function pot(parent,id=0,roll=0,size=1){const base=mul(parent,mul(rz(roll),scale(size,size,size)));draw(pots[id],base,potColors[id]);draw(lids,mul(base,translate(0,id===1?.68:id===2?.49:.62,0)),potColors[id]);for(const yy of[-.25,.04]){const ring=mul(base,mul(translate(0,yy,0),scale(1.013,.032,1.013)));draw(pots[id],ring,'#bd8b5c');}}
+
+// Free XZ-plane rolling. There is no centreline constraint or automatic forward motion.
+const R=.40;
+const STAGES=[
+ {name:'공방',sub:'작업대 사이 지그재그',tag:'01 · 공방 탈출',mission:'작업대를 돌아 공방 출구 찾기',quote:'작업대가 여기저기 있네! 넓은 쉼터에서 방향을 바꿔 보자.',tip:'넓은 작업 마당을 지나 위아래로 굽은 길을 돌아가요.',color:'#bea176',width:2.8,
+  route:[[-7.6,-4.2],[-3.5,-4.2],[-3.5,2.5],[2,2.5],[2,-2],[7,-2],[7,4.6]],checks:[1,3,5],rooms:[{x:-3.5,z:-4.2,r:1.8},{x:-3.5,z:2.5,r:1.8},{x:2,z:-2,r:1.8}],
+  holes:[{x:-4.17,z:-.3,r:.55},{x:.2,z:3.18,r:.54},{x:7.67,z:1.2,r:.55}],sweepers:[],crumbles:[]},
+
+ {name:'가마 앞',sub:'두 가마를 잇는 나무 다리',tag:'02 · 가마 옆길',mission:'가마 사이 세 다리 건너기',quote:'커다란 가마 사이로 다리가 이어져 있어. 도구가 비킬 때 가자!',tip:'나무 다리를 번갈아 건너요. 넓은 끝마당에서 잠깐 쉬어도 돼요.',color:'#aa815b',width:2.3,
+  route:[[-7.6,3.8],[-5,3.8],[-5,-3.8],[0,-3.8],[0,3.2],[5,3.2],[5,-3.8],[7.1,-3.8]],checks:[2,4,6],rooms:[{x:-5,z:-3.8,r:1.65},{x:0,z:3.2,r:1.65},{x:5,z:-3.8,r:1.65}],
+  holes:[{x:-.61,z:-.4,r:.46}],sweepers:[{x:-5,z:0,axis:'x',amp:2.25,period:7.2,phase:.3,w:.9,d:.45},{x:5,z:.1,axis:'x',amp:2.25,period:7.6,phase:1.5,w:.9,d:.45}],crumbles:[]},
+ {name:'전시실',sub:'전시장을 돌아, 가운데 내 자리',tag:'03 · 내 전시대로',mission:'전시장을 한 바퀴 돌아 중앙 전시대로',quote:'내 이름표는 가운데 있어! 전시장 바깥길을 돌아 들어가자.',tip:'큰 전시장을 돌아 가운데로 들어가요. 금 간 판은 2.2초 뒤 무너져요.',color:'#91aba3',width:2.65,
+  route:[[-7,4.3],[-7,-4.2],[6,-4.2],[6,4.1],[0,4.1],[0,.3]],checks:[1,2,3],rooms:[{x:0,z:.3,r:1.75}],
+  holes:[{x:0,z:-4.87,r:.52},{x:6.66,z:-.3,r:.51}],sweepers:[{x:-7,z:0,axis:'x',amp:2.2,period:7.0,phase:2,w:.9,d:.45}],crumbles:[{x:6,z:2.4,w:2.66,d:.88},{x:2.8,z:4.1,w:.88,d:2.66}]}
+];
+function segmentDistance(x,z,a,b){const dx=b[0]-a[0],dz=b[1]-a[1],t=clamp(((x-a[0])*dx+(z-a[1])*dz)/(dx*dx+dz*dz),0,1);return Math.hypot(x-a[0]-dx*t,z-a[1]-dz*t);}
+function clearance(st,x,z){let best=Math.max(1.55-Math.hypot(x-st.route[0][0],z-st.route[0][1]),1.45-Math.hypot(x-st.route.at(-1)[0],z-st.route.at(-1)[1]));for(const room of st.rooms||[])best=Math.max(best,room.r-Math.hypot(x-room.x,z-room.z));for(const i of st.checks)best=Math.max(best,1.5-Math.hypot(x-st.route[i][0],z-st.route[i][1]));for(let i=1;i<st.route.length;i++)best=Math.max(best,st.width/2-segmentDistance(x,z,st.route[i-1],st.route[i]));return best;}
+function onCourse(st,x,z,inset=0){return clearance(st,x,z)>inset;}
+function activeFloor(){return STAGES[stage].surfaces[floorLevel];}
+function checkpointTouched(x,z,p){return Math.hypot(Math.max(Math.abs(x-p[0])-.575,0),Math.max(Math.abs(z-p[1])-.575,0))<=R;}
+function cornerPatches(sf){const patches=[],half=sf.width/2;for(let i=1;i<sf.route.length-1;i++){const p=sf.route[i],a=sf.route[i-1],b=sf.route[i+1],la=Math.hypot(p[0]-a[0],p[1]-a[1]),lb=Math.hypot(b[0]-p[0],b[1]-p[1]),ax=(p[0]-a[0])/la,az=(p[1]-a[1])/la,bx=(b[0]-p[0])/lb,bz=(b[1]-p[1])/lb,dot=ax*bx+az*bz,turn=ax*bz-az*bx;if(Math.abs(turn)<.15)continue;const sign=Math.sign(turn),nx=-az-bz,nz=ax+bx,len=Math.hypot(nx,nz);patches.push({x:p[0]-sign*nx/len*half,z:p[1]-sign*nz/len*half,r:.64});if(dot<.58)patches.push({x:p[0]+sign*nx*half/(1+dot),z:p[1]+sign*nz*half/(1+dot),r:.58});}const end=sf.route.at(-1);patches.push({x:end[0]-.55,z:end[1]+1.2,r:.6});return patches;}
+function resolveWalls(st,oldX,oldZ){for(let iteration=0;iteration<3;iteration++)for(const w of st.wallSegments){const minX=w.x-w.w/2,maxX=w.x+w.w/2,minZ=w.z-w.d/2,maxZ=w.z+w.d/2;let dx=px-clamp(px,minX,maxX),dz=pz-clamp(pz,minZ,maxZ),dist=Math.hypot(dx,dz),push=R+.005-dist;if(push<=0)continue;if(dist<1e-7){const sides=[{d:px-minX,nx:-1,nz:0},{d:maxX-px,nx:1,nz:0},{d:pz-minZ,nx:0,nz:-1},{d:maxZ-pz,nx:0,nz:1}].sort((a,b)=>a.d-b.d);dx=sides[0].nx;dz=sides[0].nz;push=R+.005+sides[0].d;dist=1;}const nx=dx/dist,nz=dz/dist;px+=nx*push;pz+=nz*push;const outward=vx*nx+vz*nz;if(outward<0){vx-=1.08*outward*nx;vz-=1.08*outward*nz;}}}
+
+function inHole(st,x,z){return st.holes.some(h=>Math.hypot(x-h.x,z-h.z)<h.r-.04);}
+function inRect(x,z,r,pad=0){return Math.abs(x-r.x)<r.w/2+pad&&Math.abs(z-r.z)<r.d/2+pad;}
+function sweeperAt(h,time){const shift=Math.sin(time*TAU/h.period+h.phase)*h.amp;return {...h,x:h.x+(h.axis==='x'?shift:0),z:h.z+(h.axis==='z'?shift:0)};}
+// Every floor has its own solid geometry and outer-edge collision walls.
+for(const st of STAGES){st.surfaces=(st.levels||[{height:0,route:st.route}]).map((level,index)=>{const checks=[];for(let j=0;j<level.route.length;j++)if(st.checks.some(i=>(st.checkLevels?.[i]||0)===index&&Math.hypot(st.route[i][0]-level.route[j][0],st.route[i][1]-level.route[j][1])<.01))checks.push(j);return {...st,...level,level:index,checks};});
+for(const surface of st.surfaces){const cells=new Set(),outer=new Set(),step=.16,minX=-10,minZ=-7,nx=116,nz=87;
+ for(let iz=0;iz<nz;iz++)for(let ix=0;ix<nx;ix++){const x=minX+(ix+.5)*step,z=minZ+(iz+.5)*step;if(!onCourse(surface,x,z))continue;outer.add(ix+','+iz);if(!surface.holes.some(h=>Math.hypot(x-h.x,z-h.z)<h.r)&&!surface.crumbles.some(r=>inRect(x,z,r)))cells.add(ix+','+iz);}
+ const patches=cornerPatches(surface);surface.wallSegments=[];const vv=[],nn=[],wv=[],wn=[];function face(p,n,vs=vv,ns=nn){for(const i of[0,1,2,0,2,3]){vs.push(...p[i]);ns.push(...n);}}
+ function wall(x,z,w,d){if(!patches.some(p=>Math.hypot(x-p.x,z-p.z)<=p.r))return;surface.wallSegments.push({x,z,w,d});const a=x-w/2,b=x+w/2,c=z-d/2,e=z+d/2,h=.28;face([[a,h,e],[b,h,e],[b,h,c],[a,h,c]],[0,1,0],wv,wn);face([[a,0,e],[b,0,e],[b,h,e],[a,h,e]],[0,0,1],wv,wn);face([[b,0,c],[a,0,c],[a,h,c],[b,h,c]],[0,0,-1],wv,wn);face([[a,0,c],[a,0,e],[a,h,e],[a,h,c]],[-1,0,0],wv,wn);face([[b,0,e],[b,0,c],[b,h,c],[b,h,e]],[1,0,0],wv,wn);}
+ for(const key of cells){const [ix,iz]=key.split(',').map(Number),x=minX+ix*step,z=minZ+iz*step,X=x+step,Z=z+step;
+ face([[x,0,Z],[X,0,Z],[X,0,z],[x,0,z]],[0,1,0]);
+ if(!cells.has((ix-1)+','+iz))face([[x,-.42,z],[x,-.42,Z],[x,0,Z],[x,0,z]],[-1,0,0]);
+ if(!cells.has((ix+1)+','+iz))face([[X,-.42,Z],[X,-.42,z],[X,0,z],[X,0,Z]],[1,0,0]);
+ if(!cells.has(ix+','+(iz-1)))face([[X,-.42,z],[x,-.42,z],[x,0,z],[X,0,z]],[0,0,-1]);
+ if(!cells.has(ix+','+(iz+1)))face([[x,-.42,Z],[X,-.42,Z],[X,0,Z],[x,0,Z]],[0,0,1]);}
+ for(const key of outer){const [ix,iz]=key.split(',').map(Number),x=minX+ix*step,z=minZ+iz*step;if(!outer.has((ix-1)+','+iz))wall(x,z+step/2,.16,step+.02);if(!outer.has((ix+1)+','+iz))wall(x+step,z+step/2,.16,step+.02);if(!outer.has(ix+','+(iz-1)))wall(x+step/2,z,step+.02,.16);if(!outer.has(ix+','+(iz+1)))wall(x+step/2,z+step,step+.02,.16);}
+ surface.floor=mesh(vv,nn);surface.walls=mesh(wv,wn);surface.rims=surface.holes.map(h=>lathe([[h.r,.02],[h.r+.1,.02],[h.r+.1,.055],[h.r,.055],[h.r,.02]]));
+}}
+
+let screen='title',selected=0,stage=0,angle=0,tiltZ=0,px=-7,pz=-4.8,vx=0,vz=0,roll=0,rollX=0,hold=0,elapsed=0,totalTime=0,toast='',toastTime=0,transition=0,done=false;
+let layout={x:0,y:0,w:1600,h:1000,dpr:1};
+let last=0,acc=0,dirty=true,contextLost=false,portrait=false,storyIndex=0,simulationTime=0,fallTime=0,falling=false,failures=0,fallReason='',invulnerable=0;
+let checkpoint={x:-7,z:-4.8,index:-1,level:0},crumbles=[],floorLevel=0,py=0;
+const pointers=new Map(),keys=new Set();let buttons=[];
+function input(){const held=new Set(pointers.values());return {x:(keys.has('ArrowLeft')||held.has('left')?1:0)-(keys.has('ArrowRight')||held.has('right')?1:0),z:(keys.has('ArrowDown')||held.has('down')?1:0)-(keys.has('ArrowUp')||held.has('up')?1:0)};}
+function clearInput(){pointers.clear();keys.clear();dirty=true;}
+function notify(t,d=3){toast=t;toastTime=d;dirty=true;}
+function startStage(n){stage=n;const p=STAGES[n].route[0];px=p[0];pz=p[1];vx=vz=angle=tiltZ=roll=rollX=hold=elapsed=transition=0;done=falling=false;fallTime=0;invulnerable=0;floorLevel=0;py=0;checkpoint={x:px,z:pz,index:-1,level:0};crumbles=STAGES[n].crumbles.map(()=>({charge:0,down:0}));clearInput();screen=n===0?'brief':'play';if(n===0)notify(STAGES[n].tip,6);else{toast='';toastTime=0;}dirty=true;}
+function resetCheckpoint(){px=checkpoint.x;pz=checkpoint.z;floorLevel=checkpoint.level||0;py=STAGES[stage].surfaces[floorLevel].height;vx=vz=angle=tiltZ=hold=roll=rollX=0;falling=false;fallTime=0;crumbles=STAGES[stage].crumbles.map(()=>({charge:0,down:0}));invulnerable=1.5;toast='';toastTime=0;clearInput();}
+function fail(reason){if(falling||done)return;falling=true;fallReason=reason;fallTime=0;failures++;toast='';toastTime=0;clearInput();}
+function next(){if(stage<STAGES.length-1)startStage(stage+1);else{screen='finish';clearInput();dirty=true;}}
+
+function tick(dt){if(screen!=='play'||portrait||document.hidden)return;simulationTime+=dt;if(toastTime>0)toastTime-=dt;
+ if(done){transition+=dt;if(transition>2.3)next();dirty=true;return;}
+ if(falling){fallTime+=dt;px+=vx*dt*.25;pz+=vz*dt*.25;if(fallTime>1.05)resetCheckpoint();dirty=true;return;}
+ elapsed+=dt;totalTime+=dt;invulnerable=Math.max(0,invulnerable-dt);
+ const st=STAGES[stage],turn=input();angle+=turn.x*26*Math.PI/180*dt;tiltZ+=turn.z*26*Math.PI/180*dt;
+ const magnitude=Math.hypot(angle,tiltZ);if(magnitude>LIMIT){angle*=LIMIT/magnitude;tiltZ*=LIMIT/magnitude;}
+ // Actual two-axis gravity projection into the tilted board's XZ plane.
+ const ax=-9.8*.667*Math.sin(angle),az=9.8*.667*Math.cos(angle)*Math.sin(tiltZ);
+ vx=(vx+ax*dt)*Math.exp(-.72*dt);vz=(vz+az*dt)*Math.exp(-.72*dt);
+ const speed=Math.hypot(vx,vz);if(speed>12){vx*=12/speed;vz*=12/speed;}
+ const oldX=px,oldZ=pz;px+=vx*dt;pz+=vz*dt;roll-=vx*dt/R;rollX+=vz*dt/R;
+ // Low outer walls collide with the moving circle; holes remain unguarded.
+ resolveWalls(activeFloor(),oldX,oldZ);
+ if(!onCourse(activeFloor(),px,pz,R*.18)){fail('앗, 길 가장자리에서 떨어졌어요!');return;}
+ if(inHole(st,px,pz)){fail('앗, 바닥 구멍에 빠졌어요!');return;}
+ for(let i=0;i<st.crumbles.length;i++){const c=crumbles[i],r=st.crumbles[i];if(c.down>0){c.down=Math.max(0,c.down-dt);if(c.down===0)c.charge=0;}
+   else if(c.charge>0||inRect(px,pz,r,R*.1)){c.charge+=dt;if(c.charge>=2.2){c.down=2.8;notify('금 간 바닥이 무너졌어요!',2);}}
+   if(c.down>0&&inRect(px,pz,r,-.03)){fail('앗, 금 간 바닥이 무너졌어요!');return;}}
+ if(invulnerable<=0)for(const h of st.sweepers){const q=sweeperAt(h,simulationTime);if(inRect(px,pz,q,R*.8)){vx+=(px-q.x>=0?1:-1)*1.8;fail('앗, 움직이는 가마 도구에 닿았어요!');return;}}
+ for(const index of st.checks){const p=st.route[index];if(index>checkpoint.index&&(st.checkLevels?.[index]||0)===floorLevel&&checkpointTouched(px,pz,p)){checkpoint={x:p[0],z:p[1],index,level:floorLevel};notify('초록 안전 지점 저장! 여기서 다시 시작할 수 있어요.',3);}}
+ const goal=st.route.at(-1);if(floorLevel===st.surfaces.length-1&&Math.hypot(Math.max(Math.abs(px-goal[0])-.85,0),Math.max(Math.abs(pz-goal[1])-.85,0))<=R){vx=vz=0;clearInput();next();return;}
+ dirty=true;
+}
+
+function round(x,y,w,h,r=20){ctx.beginPath();ctx.roundRect(x,y,w,h,r);}
+function fillRound(x,y,w,h,col,r=20){ctx.fillStyle=col;round(x,y,w,h,r);ctx.fill();}
+function text(str,x,y,size=24,col=C.ink,weight=500,align='left'){ctx.fillStyle=col;ctx.font=`${weight} ${size}px "Malgun Gothic","Apple SD Gothic Neo",sans-serif`;ctx.textAlign=align;ctx.textBaseline='middle';ctx.fillText(str,x,y);}
+function line(x1,y1,x2,y2,col=C.line,width=2){ctx.strokeStyle=col;ctx.lineWidth=width;ctx.beginPath();ctx.moveTo(x1,y1);ctx.lineTo(x2,y2);ctx.stroke();}
+function label(str,x,y){text(str,x,y,18,C.green,700);}
+function btn(id,x,y,w,h,str,primary=false){fillRound(x,y,w,h,primary?C.green:C.paper,20);if(!primary){ctx.strokeStyle=C.line;ctx.lineWidth=2;round(x,y,w,h,20);ctx.stroke();}text(str,x+w/2,y+h/2,24,primary?'#ffffff':C.ink,700,'center');buttons.push({id,x,y,w,h});}
+function leaf(x,y,s=1,col=C.green){ctx.save();ctx.translate(x,y);ctx.scale(s,s);ctx.strokeStyle=col;ctx.fillStyle=col;ctx.lineWidth=3;ctx.beginPath();ctx.moveTo(0,22);ctx.quadraticCurveTo(-12,-2,1,-31);ctx.quadraticCurveTo(25,-20,0,22);ctx.fill();ctx.beginPath();ctx.moveTo(0,20);ctx.quadraticCurveTo(20,5,34,5);ctx.quadraticCurveTo(37,28,0,20);ctx.fill();ctx.restore();}
+function header(){leaf(68,62,.65);text('부천시박물관 · 옹기 이야기',96,61,21,C.ink,700);text('PLAYFUL MUSEUM',1530,61,16,C.muted,600,'right');line(64,99,1536,99);}
+function photoPlaceholder(x,y,w,h,id){fillRound(x,y,w,h,'#eee7d8',18);ctx.save();ctx.strokeStyle='#d4c9b4';ctx.setLineDash([6,7]);ctx.lineWidth=2;round(x+12,y+12,w-24,h-24,12);ctx.stroke();ctx.restore();text('실제 소장품 사진 확인 예정',x+w/2,y+h-25,16,C.muted,500,'center');text(`소장품 ${String.fromCharCode(65+id)}`,x+w/2,y+30,17,C.muted,700,'center');}
+function drawTitle(){header();label('A LITTLE JOURNEY HOME',100,188);text('데굴데굴 옹기',96,280,78,C.ink,800);text('내 자리로 돌아가는 길',100,360,38,C.green,600);text('박물관이 문을 열기 전,',102,452,26,C.ink);text('작은 옹기의 귀가를 도와주세요.',102,496,26,C.ink);text('길을 기울이고, 천천히 굴러서, 내 전시대로!',102,557,22,C.muted);btn('select',100,626,338,78,'옹기와 함께 출발하기  →',true);
+ fillRound(860,178,610,620,'#e7e9d6',270);ctx.fillStyle='#cbd0b9';ctx.beginPath();ctx.ellipse(1165,664,146,19,0,0,TAU);ctx.fill();text('“내 이름표가 있는 곳으로!”',1165,760,24,C.green,600,'center');
+ line(100,873,1500,873);text('사진 · 소장품 정보는 확인 전 자리표시자입니다.',1500,917,17,C.muted,400,'right');}
+function drawSelect(){header();label('CHOOSE YOUR ONGGI',100,163);text('어떤 옹기와 함께할까요?',100,222,46,C.ink,800);text('게임용 캐릭터예요. 실제 소장품 사진과 이름은 확인 후 만나요.',102,282,23,C.muted);for(let i=0;i<3;i++){const x=100+i*480;fillRound(x,338,440,405,selected===i?'#edf0e2':C.paper,26);ctx.strokeStyle=selected===i?C.green:C.line;ctx.lineWidth=selected===i?4:2;round(x,338,440,405,26);ctx.stroke();photoPlaceholder(x+22,360,396,225,i);text(`옹기 친구 ${String.fromCharCode(65+i)}`,x+28,625,28,C.ink,700);text('[공식 명칭 · 쓰임 설명 확인 예정]',x+28,669,18,C.muted);text(selected===i?'● 함께 갈 친구':'○ 이 친구 선택',x+28,711,18,selected===i?C.green:C.muted,700);buttons.push({id:'pot'+i,x,y:338,w:440,h:405});}btn('title',100,846,195,69,'← 돌아가기');btn('guide',1100,840,400,80,'이 친구와 출발하기  →',true);text('사진 출처·라이선스·사용 허가 확인 전에는 실제 사진을 사용하지 않습니다.',800,962,17,C.muted,400,'center');}
+function drawGuide(){header();label('HOW TO PLAY',100,162);text('네 방향으로 기울여, 함정을 피해요.',100,224,45,C.ink,800);const cards=[['01','앞 · 뒤 · 왼쪽 · 오른쪽','화살표를 누르는 동안 판이 그 방향으로 기울어요.'],['02','손을 놓아도 계속 굴러가요','기울기는 유지돼요. 반대로 눌러 속도를 줄이세요.'],['03','모서리에만 작은 벽이 있어요','벽 없는 가장자리와 구멍에서는 떨어질 수 있어요.']];cards.forEach((a,i)=>{const y=320+i*146;fillRound(100,y,900,122,C.paper,20);text(a[0],135,y+43,25,C.orange,800);text(a[1],206,y+40,27,C.ink,700);text(a[2],206,y+84,21,C.muted);});fillRound(1050,320,450,414,'#e6ebd8',24);text('모서리의 짧은 벽을 활용해요',1275,389,29,C.orange,800,'center');text('초록 사각형은 안전 지점.',1275,468,23,C.ink,500,'center');text('닿기만 하면 바로 저장돼요.',1275,511,23,C.ink,500,'center');text('주황 막대와 금 간 판은 조심.',1275,590,21,C.ink,500,'center');text('벽 없는 구간에서는 천천히',1275,664,21,C.green,700,'center');btn('select',100,840,200,80,'← 다시 선택');btn('start',1080,840,420,80,'이야기 시작  →',true);}
+const STORY=[
+ {tag:'개관 5분 전',title:'어라? 여긴 어디지?',lines:['전시 준비 수레에서 데굴데굴 내려온 작은 옹기.','눈을 떠 보니 낯선 공방 한가운데였어요.'],quote:'“여긴 내 전시대가 아닌데?”'},
+ {tag:'저 멀리, 나의 이름표',title:'내 자리로 돌아가야 해!',lines:['창 너머 전시실에 익숙한 이름표가 보여요.','공방과 가마 앞을 지나면 전시실에 도착해요.'],quote:'“친구들이 오기 전에 돌아가고 싶어.”'},
+ {tag:'너와 함께하는 작은 모험',title:'길을 조금 기울여 줄래?',lines:['굽은 공방 길과 가마 앞을 지나 전시실로 가요.','급할 땐 천천히. 떨어져도 안전 지점에서 다시!'],quote:'“우리, 함께 집으로 가자!”'}
+];
+function drawStory(){header();const item=STORY[storyIndex];label(`STORY ${storyIndex+1} / 3  ·  ${item.tag}`,100,190);text(item.title,100,285,51,C.ink,800);item.lines.forEach((t,i)=>text(t,102,393+i*49,25,C.muted));fillRound(100,548,782,100,'#e6ebd8',22);text(item.quote,491,598,30,C.green,700,'center');fillRound(1000,200,480,520,'#e5e8d5',200);text('작은 옹기의 귀가 이야기',1240,751,21,C.muted,500,'center');for(let i=0;i<3;i++){ctx.fillStyle=i===storyIndex?C.green:'#ced6bf';ctx.beginPath();ctx.arc(1210+i*30,790,6,0,TAU);ctx.fill();}text('이야기 속 5분이에요. 시간 초과로 실패하지 않아요.',100,945,18,C.muted);btn('story-next',1080,840,420,80,storyIndex<2?'다음 이야기  →':'공방으로 출발!  →',true);}
+function drawBrief(){header();const st=STAGES[stage];label(st.tag+'',100,179);text(st.name+'에 도착했어요',100,260,52,C.ink,800);text(st.quote,102,352,25,C.green,600);fillRound(100,427,850,236,C.paper,26);label('이번 길의 목표',135,473);text(st.mission,135,528,32,C.ink,800);text(stage===0?'넓은 작업 마당에서 방향을 바꿔 지그재그로 돌아가요.':stage===1?'두 가마 사이 다리를 번갈아 건너요. 도구가 비킬 때 출발!':'바깥 전시 통로를 돌아, 마지막에 중앙 전시대로 들어가요.',135,595,21,C.muted);fillRound(1050,232,420,450,'#e5e8d5',190);text(stage===0?'작업 마당 + 지그재그':stage===1?'두 가마 + 세 나무 다리':'큰 순환 통로 → 중앙 전시대',1260,729,23,C.green,700,'center');btn('begin',1080,840,420,80,'조심조심 출발!  →',true);text('네 방향 버튼으로 움직여요. 떨어져도 횟수 제한 없이 재도전!',100,912,20,C.muted);}
+function tiltButton(id,x,y,arrow){const active=[...pointers.values()].includes(id)||keys.has({left:'ArrowLeft',right:'ArrowRight',up:'ArrowUp',down:'ArrowDown'}[id]);fillRound(x,y,140,110,active?C.dark:C.green,24);text(arrow,x+70,y+55,43,'#fff',800,'center');buttons.push({id,x,y,w:140,h:110});}
+function drawPlay(){
+ for(let i=0;i<STAGES.length;i++){const x=1065+i*120;fillRound(x,43,112,46,i===stage?C.green:'#e7e9dc',23);text((i<stage?'✓ ':'')+STAGES[i].name,x+56,66,16,i===stage?'#fff':C.muted,700,'center');}
+ text('재도전 '+failures+'회  ·  '+(checkpoint.index>=0?'안전 지점 저장됨':'출발 지점에서 재시작'),1535,132,19,C.muted,500,'right');
+ if(toastTime>0){fillRound(64,42,940,54,C.paper,27);text(toast,534,69,22,falling?C.orange:C.green,700,'center');}
+ tiltButton('left',240,860,'←');tiltButton('up',500,860,'↑');tiltButton('down',980,860,'↓');tiltButton('right',1240,860,'→');
+ ctx.strokeStyle='#cbd5bd';ctx.lineWidth=3;ctx.beginPath();ctx.arc(800,845,61,0,TAU);ctx.stroke();line(739,845,861,845,'#d5dcc8',2);line(800,784,800,906,'#d5dcc8',2);ctx.fillStyle=C.green;ctx.beginPath();ctx.arc(800-angle/LIMIT*53,845+tiltZ/LIMIT*53,9,0,TAU);ctx.fill();text('기울기 '+Math.round(Math.hypot(angle,tiltZ)*180/Math.PI)+'°',800,934,22,C.green,700,'center');
+ if(done){fillRound(450,333,700,216,C.paper,30);text(stage===STAGES.length-1?'내 전시대 도착!':'이 길 통과!',800,403,48,C.green,800,'center');text(stage===STAGES.length-1?'이제 친구들을 만날 준비가 됐어요.':'다음 공간으로 함께 가요.',800,477,25,C.muted,500,'center');}
+}
+function drawFinish(){header();label('WELCOME HOME',100,165);text('내 자리로 돌아왔어요!',100,237,54,C.ink,800);text('길을 기울이고 속도를 조절해 준 덕분이에요.',102,314,26,C.muted);fillRound(100,382,650,360,'#e8ecda',28);text('공방 ✓     가마 앞 ✓     전시실 ✓',425,440,21,C.green,700,'center');text('함께한 옹기 친구 '+String.fromCharCode(65+selected)+' · 재도전 '+failures+'회',425,513,31,C.ink,800,'center');text('사진 속 진짜 옹기는 곧 만나요.',425,577,24,C.muted,500,'center');text('공식 명칭 · 쓰임 · 사진 · 출처 확인 예정',425,625,20,C.muted,500,'center');text('게임 캐릭터는 실물의 정확한 복원이 아닙니다.',425,687,17,C.muted,400,'center');photoPlaceholder(900,382,570,360,selected);btn('replay',100,825,390,80,'한 번 더 도와주기  ↻',true);btn('select',520,825,280,80,'다른 옹기 만나기');text('부천시박물관 옹기 소장품을 소재로 한 체험 게임',1500,949,18,C.muted,500,'right');}
+function drawUI(){ctx.clearRect(0,0,W,H);buttons=[];if(screen==='title')drawTitle();if(screen==='select')drawSelect();if(screen==='guide')drawGuide();if(screen==='story')drawStory();if(screen==='brief')drawBrief();if(screen==='play')drawPlay();if(screen==='finish')drawFinish();if(portrait){fillRound(180,276,1240,448,C.paper,38);text('태블릿을 가로로 돌려 주세요',800,437,49,C.green,800,'center');text('화면을 돌리는 동안 게임은 잠시 쉬고 있어요.',800,535,26,C.muted,500,'center');buttons=[];}gl.activeTexture(gl.TEXTURE0);gl.bindTexture(gl.TEXTURE_2D,tex);gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL,false);gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,gl.RGBA,gl.UNSIGNED_BYTE,ui);dirty=false;}
+
+
+function mapScenery(root){const st=STAGES[stage];
+ if(stage===0){
+  for(const room of st.rooms)for(let i=0;i<4;i++){const a=i*TAU/4;block(root,room.x+Math.cos(a)*1.5,.015,room.z+Math.sin(a)*1.5,.12,.025,.12,'#e6c497');}
+ }else if(stage===1){
+  for(const x of[-2.5,2.5]){block(root,x,.65,0,2.05,1.3,3.1,'#a96f4b');block(root,x,1.5,0,1.65,.45,2.55,'#bb8960');block(root,x,2.1,0,.8,.85,1,'#bf9970');block(root,x-.01,.45,1.59,1.02,.88,.06,'#5b5144');for(let i=0;i<4;i++)block(root,x-.82+i*.55,1.3,.02,.07,.06,3.1,'#e0b28b');}
+  for(const x of[-5,0,5])for(let z=-2.8;z<3;z+=.62){if(!inHole(st,x,z))block(root,x,.021,z,2.2,.035,.12,'#d1a574');}
+ }else{
+  for(const x of[-2.7,2.7]){block(root,x,.22,-.75,2.3,.44,2.25,'#c5c7b4');block(root,x,.49,-.75,2.08,.1,2.03,'#e0decb');pot(mul(root,translate(x,.98,-.75)),x<0?1:2,0,.8);for(const dx of[-.95,.95])for(const dz of[-.9,.9])block(root,x+dx,1.15,-.75+dz,.065,1.22,.065,'#a3b9ae');block(root,x,1.79,-.75,2.08,.075,2.03,'#d5dfd1');}
+  for(const [x,z]of[[-9,-5.2],[8,-5.2],[-9,5.2],[8,5.2]]){block(root,x,.85,z,.48,1.7,.48,'#c1c8b5');block(root,x,1.74,z,.7,.12,.7,'#d5d9c5');}
+ }
+}
+function worldScene(){
+ vp=mul(ortho(-15/.9,15/.9,-9.375/.9,9.375/.9,-55,55),mul(translate(0,.9,0),rx(1.18)));
+ const root=mul(rz(angle),rx(tiltZ)),st=STAGES[stage];
+ // The canvas clear colour is the full-bleed backdrop; no bounded background slab.
+ for(const sf of st.surfaces){const base=mul(root,translate(0,sf.height,0));
+  if(st.levels){for(const p of [sf.route[0],sf.route.at(-1)]){const h=sf.height+1.8;block(root,p[0],sf.height-h/2-.3,p[1],.7,h,.7,'#a4b0ac');}block(base,sf.route[0][0],-.23,sf.route[0][1],1.9,.13,1.9,'#82979c');}
+  draw(sf.floor,base,st.color);draw(sf.walls,base,'#e6d5ad');
+  for(let j=1;j<sf.route.length;j++){const a=sf.route[j-1],b=sf.route[j],len=Math.hypot(b[0]-a[0],b[1]-a[1]);for(let d=.5;d<len-.4;d+=.7){const t=d/len,x=mix(a[0],b[0],t),z=mix(a[1],b[1],t);if(!inHole(sf,x,z)&&!sf.crumbles.some(r=>inRect(x,z,r)))block(base,x,.014,z,.1,.025,.1,'#eee2c5');}}
+  for(let i=0;i<sf.holes.length;i++){const h=sf.holes[i];draw(sf.rims[i],mul(base,translate(h.x,0,h.z)),'#d17f56');block(base,h.x,-2.3,h.z,h.r*1.4,.08,h.r*1.4,'#746659');}
+  for(const index of st.checks){if((st.checkLevels?.[index]||0)!==sf.level)continue;const p=st.route[index];block(base,p[0],.02,p[1],1.15,.04,1.15,index<=checkpoint.index?'#6b9b69':'#a0ba85');block(base,p[0],.05,p[1],.6,.03,.6,'#dce7b4');}
+  for(let i=0;i<sf.crumbles.length;i++){const r=sf.crumbles[i],c=crumbles[i];if(c.down>0)continue;const shake=c.charge>0?Math.sin(simulationTime*48)*.025:0;block(base,r.x,.015+shake,r.z,r.w+.15,.12,r.d+.15,c.charge>1.6?'#cf6950':'#c99c63');for(let j=0;j<3;j++)block(base,r.x+(j-1)*r.w*.2,.085+shake,r.z+(j%2?.12:-.12),r.w*.12,.018,r.d*.7,'#795d43',.3);}
+  for(const h of sf.sweepers){const q=sweeperAt(h,simulationTime);block(base,h.x,-.02,h.z,h.axis==='x'?h.amp*2+.7:.22,.03,h.axis==='z'?h.amp*2+.7:.22,'#bd7c57');block(base,q.x,.38,q.z,q.w,.76,q.d,'#c75f44');block(base,q.x,.79,q.z,q.w*.8,.07,q.d*.8,'#f2c185');}
+ }
+ mapScenery(root);
+ const last=st.surfaces.at(-1),goalRoot=mul(root,translate(0,last.height,0)),g=st.route.at(-1);block(goalRoot,g[0],.04,g[1],1.7,.08,1.7,'#779d67');block(goalRoot,g[0],.1,g[1],1.15,.05,1.15,'#d6dfad');block(goalRoot,g[0]+1,.85,g[1]+.7,.09,1.7,.09,'#789068');block(goalRoot,g[0]+.55,1.55,g[1]+.7,.9,.42,.07,'#9ebc79');
+ for(let i=0;i<4;i++){const x=i%2===0?-11:10.4,z=-4+i*2.8;block(root,x,-.5,z,1.7,.7,1.7,'#b6ba9f');if(stage===1){block(root,x,.3,z,1.5,.9,1.5,'#b98a64');block(root,x,1.1,z,.65,.85,.65,'#c69b76');}else pot(mul(root,translate(x,.45,z)),i%3,0,.72);}
+ if(!falling)block(root,px,py+.025,pz,.6,.035,.55,'#7a735f');
+ const drop=falling?Math.min(5,fallTime*fallTime*6):0;pot(mul(root,mul(translate(px,py+.47-drop,pz),rx(rollX))),selected,roll,.66);
+}
+
+function scene(clear=true){gl.disable(gl.BLEND);gl.enable(gl.DEPTH_TEST);gl.clearColor(...rgb(screen==='play'?'#dce1d4':C.cream),1);gl.clear(clear?gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT:gl.DEPTH_BUFFER_BIT);
+ if(screen==='play'){
+ worldScene();
+ }else if(screen==='title'){
+ vp=ortho(0,16,0,10,-30,30);pot(mul(translate(11.65,4.72,0),mul(rx(.14),ry(-.18))),0,0,2.0);
+ }else if(screen==='select'){
+ vp=ortho(0,16,0,10,-30,30);for(let i=0;i<3;i++)pot(mul(translate(3.2+4.8*i,5.15,0),mul(rx(.14),ry(-.2))),i,0,.81);
+ }else if(screen==='finish'){
+ vp=ortho(0,16,0,10,-30,30);pot(mul(translate(11.85,4.65,0),mul(rx(.18),ry(-.2))),selected,0,1.3);
+ }else if(screen==='story'||screen==='brief'){
+ vp=ortho(0,16,0,10,-30,30);const root=translate(12.5,4.9,0);block(identity(),12.5,3.5,-1,3.6,.22,1.4,'#b9ac86');pot(mul(root,mul(rx(.12),ry(-.22))),selected,storyIndex===0?-.18:0,1.5);if(screen==='story'&&storyIndex===0){for(const x of[11.4,13.6])pot(mul(translate(x,3.1,-1),rx(.15)),(selected+1)%3,0,.35);}else{block(identity(),13.9,5.1,-2,.08,3,.08,'#9bac7e');block(identity(),13.25,6.4,-2,1.3,.65,.1,'#98ad77');}
+ }
+}
+function render(){gl.viewport(Math.round(layout.x*layout.dpr),Math.round((innerHeight-layout.y-layout.h)*layout.dpr),Math.round(layout.w*layout.dpr),Math.round(layout.h*layout.dpr));scene();if(dirty)drawUI();gl.disable(gl.DEPTH_TEST);gl.enable(gl.BLEND);gl.blendFunc(gl.SRC_ALPHA,gl.ONE_MINUS_SRC_ALPHA);gl.useProgram(pu);gl.bindBuffer(gl.ARRAY_BUFFER,quad);const p=gl.getAttribLocation(pu,'position');gl.enableVertexAttribArray(p);gl.vertexAttribPointer(p,2,gl.FLOAT,false,0,0);gl.activeTexture(gl.TEXTURE0);gl.bindTexture(gl.TEXTURE_2D,tex);gl.uniform1i(gl.getUniformLocation(pu,'image'),0);gl.drawArrays(gl.TRIANGLES,0,6);if(!portrait&&['title','select','finish','story','brief'].includes(screen))scene(false);}
+function resize(){const dpr=Math.min(window.devicePixelRatio||1,2),vw=innerWidth,vh=innerHeight,ratio=Math.min(vw/W,vh/H);layout={x:(vw-W*ratio)/2,y:(vh-H*ratio)/2,w:W*ratio,h:H*ratio,dpr};canvas.style.width=vw+'px';canvas.style.height=vh+'px';canvas.width=Math.round(vw*dpr);canvas.height=Math.round(vh*dpr);gl.viewport(0,0,canvas.width,canvas.height);portrait=vw<vh;clearInput();dirty=true;}
+function hit(e){const r=canvas.getBoundingClientRect(),x=(e.clientX-r.left-layout.x)/layout.w*W,y=(e.clientY-r.top-layout.y)/layout.h*H;return buttons.findLast(b=>x>=b.x&&x<=b.x+b.w&&y>=b.y&&y<=b.y+b.h);}
+function action(id){if(id.startsWith('pot')){selected=Number(id.slice(3));dirty=true;return;}clearInput();if(id==='title')screen='title';if(id==='select')screen='select';if(id==='guide')screen='guide';if(id==='start'||id==='replay'){totalTime=0;failures=0;storyIndex=0;screen='story';}if(id==='story-next'){if(storyIndex<2)storyIndex++;else startStage(0);}if(id==='begin'){screen='play';notify(STAGES[stage].tip,6);}dirty=true;}
+canvas.addEventListener('pointerdown',e=>{e.preventDefault();canvas.focus({preventScroll:true});const b=hit(e);if(!b)return;canvas.setPointerCapture(e.pointerId);if(['left','right','up','down'].includes(b.id)){if(!done&&!falling)pointers.set(e.pointerId,b.id);}else pointers.set(e.pointerId,'menu:'+b.id);dirty=true;});
+canvas.addEventListener('pointermove',e=>{if(!pointers.has(e.pointerId))return;const value=pointers.get(e.pointerId);if(['left','right','up','down','released'].includes(value)){const b=hit(e);pointers.set(e.pointerId,b&&['left','right','up','down'].includes(b.id)?b.id:'released');dirty=true;}});
+canvas.addEventListener('pointerup',e=>{const value=pointers.get(e.pointerId);pointers.delete(e.pointerId);if(value&&value.startsWith('menu:')){const b=hit(e);if(b&&value==='menu:'+b.id)action(b.id);}dirty=true;});
+canvas.addEventListener('pointercancel',e=>{pointers.delete(e.pointerId);dirty=true;});canvas.addEventListener('lostpointercapture',e=>{pointers.delete(e.pointerId);dirty=true;});
+window.addEventListener('keydown',e=>{if(['ArrowLeft','ArrowRight','ArrowUp','ArrowDown'].includes(e.key)&&screen==='play'){e.preventDefault();if(!done&&!falling)keys.add(e.key);dirty=true;}});window.addEventListener('keyup',e=>{keys.delete(e.key);dirty=true;});window.addEventListener('blur',clearInput);document.addEventListener('visibilitychange',()=>{clearInput();last=0;acc=0;});window.addEventListener('resize',resize);
+canvas.addEventListener('webglcontextlost',e=>{e.preventDefault();contextLost=true;clearInput();canvas.style.display='none';document.getElementById('error').style.display='block';document.getElementById('error').textContent='그래픽 연결이 잠시 끊겼어요. 페이지를 새로 열어 주세요.';});
+function frame(ms){if(contextLost)return;const dt=last?Math.min((ms-last)/1000,.08):0;last=ms;if(!document.hidden){acc+=dt;while(acc>=1/120){tick(1/120);acc-=1/120;}render();}requestAnimationFrame(frame);}
+// Read-only snapshot for smoke tests and diagnostics; never controls the game.
+Object.defineProperty(window,'onggiState',{get:()=>({screen,stage,selected,angle,tiltZ,px,pz,vx,vz,checkpoint:{...checkpoint},floorLevel,py,done,falling,failures,crumbles:crumbles.map(c=>({...c}))})});
+resize();requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>
