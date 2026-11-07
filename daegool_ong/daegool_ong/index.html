@@ -14,7 +14,7 @@
   </style>
 </head>
 <body>
-<canvas id="game" tabindex="0" aria-label="데굴데굴 옹기 3D 탑뷰 게임. 화면의 네 방향 버튼 또는 키보드 화살표로 판을 기울이세요. 구멍과 움직이는 장애물을 피하세요."></canvas>
+<canvas id="game" tabindex="0" aria-label="데굴데굴 옹기 3D 탑뷰 게임. 화면 오른쪽 아래 조이스틱 또는 키보드 화살표로 움직이세요. 구멍과 움직이는 장애물을 피하세요."></canvas>
 <p id="error" role="alert">WebGL을 시작하지 못했어요. 브라우저의 하드웨어 가속 설정을 확인하고 최신 브라우저에서 다시 열어 주세요.</p>
 <script>
 'use strict';
@@ -54,14 +54,25 @@ const cube=boxMesh();
 const pots=[
   lathe([[0,-.62],[.36,-.62],[.48,-.46],[.62,-.12],[.61,.20],[.49,.45],[.35,.53],[.36,.62],[.27,.62],[.27,.52],[.29,.48]]),
   lathe([[0,-.62],[.32,-.62],[.40,-.46],[.48,.02],[.43,.35],[.28,.51],[.28,.68],[.21,.68],[.21,.50]]),
-  lathe([[0,-.51],[.37,-.51],[.58,-.34],[.69,-.02],[.62,.25],[.49,.39],[.50,.49],[.39,.49],[.39,.36]])
+  lathe([[0,-.51],[.37,-.51],[.58,-.34],[.69,-.02],[.62,.25],[.49,.39],[.50,.49],[.39,.49],[.39,.36]]),
+  lathe([[0,-.62],[.42,-.62],[.54,-.49],[.60,-.25],[.58,.05],[.46,.24],[.36,.30],[.37,.44],[.28,.44],[.28,.29]]),
+  lathe([[0,-.62],[.33,-.62],[.48,-.43],[.59,-.12],[.55,.15],[.33,.39],[.20,.47],[.20,.86],[.15,.86],[.15,.47]]),
+  lathe([[0,-.62],[.46,-.62],[.53,-.48],[.55,.05],[.54,.40],[.51,.56],[.42,.56],[.42,.42]])
 ];
 const lids=lathe([[0,0],[.37,0],[.40,.06],[.32,.13],[.10,.17],[.08,.25],[0,.25]]);
-const potColors=['#915432','#78452e','#ab7046'];
+const potColors=['#915432','#78452e','#ab7046','#a5653d','#744b39','#956c49'];
+const COLLECTION=[
+ {name:'동글옹기',shape:'둥근 배 · 좁은 어깨',lidY:.62,lidSize:1,lines:['배가 둥글고 어깨가 부드럽게 좁아져요.','뚜껑에서 몸통으로 이어지는 곡선을 보세요.'],question:'어느 부분이 가장 동그랗게 보이나요?'},
+ {name:'길쭉옹기',shape:'높은 몸통 · 작은 입구',lidY:.68,lidSize:.78,lines:['몸통이 위아래로 길게 뻗어 있어요.','높이와 너비를 다른 친구와 비교해 보세요.'],question:'동글옹기와 어떤 점이 다른가요?'},
+ {name:'납작옹기',shape:'낮은 키 · 넓은 몸통',lidY:.49,lidSize:1.25,lines:['키는 낮고 몸통은 옆으로 넓은 모양이에요.','가장 넓은 부분과 입구를 비교해 보세요.'],question:'넓은 몸통 위에 뚜껑이 어떻게 놓였나요?'},
+ {name:'꼬마옹기',shape:'아담한 몸통 · 짧은 목',lidY:.44,lidSize:.97,lines:['아담한 몸통 위에 짧은 목이 이어져요.','몸통과 뚜껑의 크기를 살펴보세요.'],question:'작은 옹기에게 별명을 붙여 줄까요?'},
+ {name:'목긴옹기',shape:'긴 목 · 둥근 어깨',lidY:.86,lidSize:.60,lines:['둥근 어깨 위로 가느다란 목이 길게 올라와요.','뚜껑 아래로 이어지는 긴 목을 찾아보세요.'],question:'어깨와 목은 어디에서 나뉘나요?'},
+ {name:'반듯옹기',shape:'곧은 옆면 · 넓은 입구',lidY:.56,lidSize:1.35,lines:['옆면이 반듯하고 입구가 넓은 모양이에요.','둥근 친구들과 몸통의 선을 비교해 보세요.'],question:'옆모습을 선으로 그리면 어떤 모양일까요?'}
+];
 let vp=identity();
 function draw(m,mat,col){gl.useProgram(p3);gl.bindBuffer(gl.ARRAY_BUFFER,m.b);gl.enableVertexAttribArray(loc.pos);gl.vertexAttribPointer(loc.pos,3,gl.FLOAT,false,0,0);gl.bindBuffer(gl.ARRAY_BUFFER,m.nb);gl.enableVertexAttribArray(loc.normal);gl.vertexAttribPointer(loc.normal,3,gl.FLOAT,false,0,0);gl.uniformMatrix4fv(loc.mvp,false,mul(vp,mat));gl.uniformMatrix4fv(loc.model,false,mat);gl.uniform3fv(loc.color,rgb(col));gl.drawArrays(gl.TRIANGLES,0,m.count);}
 function block(parent,x,y,z,sx,sy,sz,color,ang=0){draw(cube,mul(parent,mul(translate(x,y,z),mul(rz(ang),scale(sx,sy,sz)))),color);}
-function pot(parent,id=0,roll=0,size=1){const base=mul(parent,mul(rz(roll),scale(size,size,size)));draw(pots[id],base,potColors[id]);draw(lids,mul(base,translate(0,id===1?.68:id===2?.49:.62,0)),potColors[id]);for(const yy of[-.25,.04]){const ring=mul(base,mul(translate(0,yy,0),scale(1.013,.032,1.013)));draw(pots[id],ring,'#bd8b5c');}}
+function pot(parent,id=0,roll=0,size=1){const base=mul(parent,mul(rz(roll),scale(size,size,size))),info=COLLECTION[id];draw(pots[id],base,potColors[id]);draw(lids,mul(base,mul(translate(0,info.lidY,0),scale(info.lidSize,1,info.lidSize))),potColors[id]);for(const yy of[-.25,.04]){const ring=mul(base,mul(translate(0,yy,0),scale(1.013,.032,1.013)));draw(pots[id],ring,'#bd8b5c');}}
 
 // Free XZ-plane rolling. There is no centreline constraint or automatic forward motion.
 const R=.40;
@@ -109,8 +120,12 @@ let layout={x:0,y:0,w:1600,h:1000,dpr:1};
 let last=0,acc=0,dirty=true,contextLost=false,portrait=false,storyIndex=0,simulationTime=0,fallTime=0,falling=false,failures=0,fallReason='',invulnerable=0;
 let checkpoint={x:-7,z:-4.8,index:-1,level:0},crumbles=[],floorLevel=0,py=0;
 const pointers=new Map(),keys=new Set();let buttons=[];
-function input(){const held=new Set(pointers.values());return {x:(keys.has('ArrowLeft')||held.has('left')?1:0)-(keys.has('ArrowRight')||held.has('right')?1:0),z:(keys.has('ArrowDown')||held.has('down')?1:0)-(keys.has('ArrowUp')||held.has('up')?1:0)};}
-function clearInput(){pointers.clear();keys.clear();dirty=true;}
+const STICK_LIMIT=LIMIT,stick={id:null,x:0,y:0,cx:1340,cy:850,r:90};
+function input(){let x=-stick.x,z=stick.y;const length=Math.hypot(x,z);if(length<=.12){x=z=0;}else{const strength=clamp((length-.12)/.88,0,1);x=x/length*strength;z=z/length*strength;}if(keys.size){x=(keys.has('ArrowLeft')?1:0)-(keys.has('ArrowRight')?1:0);z=(keys.has('ArrowDown')?1:0)-(keys.has('ArrowUp')?1:0);const n=Math.hypot(x,z);if(n>1){x/=n;z/=n;}}return {x,z};}
+function releaseStick(){stick.id=null;stick.x=stick.y=0;dirty=true;}
+function clearInput(){pointers.clear();keys.clear();releaseStick();dirty=true;}
+function pointerPosition(e){const r=canvas.getBoundingClientRect();return {x:(e.clientX-r.left-layout.x)/layout.w*W,y:(e.clientY-r.top-layout.y)/layout.h*H};}
+function updateStick(e){const p=pointerPosition(e),x=(p.x-stick.cx)/stick.r,y=(p.y-stick.cy)/stick.r,n=Math.max(1,Math.hypot(x,y));stick.x=x/n;stick.y=y/n;dirty=true;}
 function notify(t,d=3){toast=t;toastTime=d;dirty=true;}
 function startStage(n){stage=n;const p=STAGES[n].route[0];px=p[0];pz=p[1];vx=vz=angle=tiltZ=roll=rollX=hold=elapsed=transition=0;done=falling=false;fallTime=0;invulnerable=0;floorLevel=0;py=0;checkpoint={x:px,z:pz,index:-1,level:0};crumbles=STAGES[n].crumbles.map(()=>({charge:0,down:0}));clearInput();screen=n===0?'brief':'play';if(n===0)notify(STAGES[n].tip,6);else{toast='';toastTime=0;}dirty=true;}
 function resetCheckpoint(){px=checkpoint.x;pz=checkpoint.z;floorLevel=checkpoint.level||0;py=STAGES[stage].surfaces[floorLevel].height;vx=vz=angle=tiltZ=hold=roll=rollX=0;falling=false;fallTime=0;crumbles=STAGES[stage].crumbles.map(()=>({charge:0,down:0}));invulnerable=1.5;toast='';toastTime=0;clearInput();}
@@ -121,11 +136,10 @@ function tick(dt){if(screen!=='play'||portrait||document.hidden)return;simulatio
  if(done){transition+=dt;if(transition>2.3)next();dirty=true;return;}
  if(falling){fallTime+=dt;px+=vx*dt*.25;pz+=vz*dt*.25;if(fallTime>1.05)resetCheckpoint();dirty=true;return;}
  elapsed+=dt;totalTime+=dt;invulnerable=Math.max(0,invulnerable-dt);
- const st=STAGES[stage],turn=input();angle+=turn.x*26*Math.PI/180*dt;tiltZ+=turn.z*26*Math.PI/180*dt;
- const magnitude=Math.hypot(angle,tiltZ);if(magnitude>LIMIT){angle*=LIMIT/magnitude;tiltZ*=LIMIT/magnitude;}
+ const st=STAGES[stage],turn=input();angle+=turn.x*26*Math.PI/180*dt;tiltZ+=turn.z*26*Math.PI/180*dt;const magnitude=Math.hypot(angle,tiltZ);if(magnitude>STICK_LIMIT){angle*=STICK_LIMIT/magnitude;tiltZ*=STICK_LIMIT/magnitude;}
  // Actual two-axis gravity projection into the tilted board's XZ plane.
  const ax=-9.8*.667*Math.sin(angle),az=9.8*.667*Math.cos(angle)*Math.sin(tiltZ);
- vx=(vx+ax*dt)*Math.exp(-.72*dt);vz=(vz+az*dt)*Math.exp(-.72*dt);
+ const damping=.72;vx=(vx+ax*dt)*Math.exp(-damping*dt);vz=(vz+az*dt)*Math.exp(-damping*dt);
  const speed=Math.hypot(vx,vz);if(speed>12){vx*=12/speed;vz*=12/speed;}
  const oldX=px,oldZ=pz;px+=vx*dt;pz+=vz*dt;roll-=vx*dt/R;rollX+=vz*dt/R;
  // Low outer walls collide with the moving circle; holes remain unguarded.
@@ -153,25 +167,28 @@ function photoPlaceholder(x,y,w,h,id){fillRound(x,y,w,h,'#eee7d8',18);ctx.save()
 function drawTitle(){header();label('A LITTLE JOURNEY HOME',100,188);text('데굴데굴 옹기',96,280,78,C.ink,800);text('내 자리로 돌아가는 길',100,360,38,C.green,600);text('박물관이 문을 열기 전,',102,452,26,C.ink);text('작은 옹기의 귀가를 도와주세요.',102,496,26,C.ink);text('길을 기울이고, 천천히 굴러서, 내 전시대로!',102,557,22,C.muted);btn('select',100,626,338,78,'옹기와 함께 출발하기  →',true);
  fillRound(860,178,610,620,'#e7e9d6',270);ctx.fillStyle='#cbd0b9';ctx.beginPath();ctx.ellipse(1165,664,146,19,0,0,TAU);ctx.fill();text('“내 이름표가 있는 곳으로!”',1165,760,24,C.green,600,'center');
  line(100,873,1500,873);text('사진 · 소장품 정보는 확인 전 자리표시자입니다.',1500,917,17,C.muted,400,'right');}
-function drawSelect(){header();label('CHOOSE YOUR ONGGI',100,163);text('어떤 옹기와 함께할까요?',100,222,46,C.ink,800);text('게임용 캐릭터예요. 실제 소장품 사진과 이름은 확인 후 만나요.',102,282,23,C.muted);for(let i=0;i<3;i++){const x=100+i*480;fillRound(x,338,440,405,selected===i?'#edf0e2':C.paper,26);ctx.strokeStyle=selected===i?C.green:C.line;ctx.lineWidth=selected===i?4:2;round(x,338,440,405,26);ctx.stroke();photoPlaceholder(x+22,360,396,225,i);text(`옹기 친구 ${String.fromCharCode(65+i)}`,x+28,625,28,C.ink,700);text('[공식 명칭 · 쓰임 설명 확인 예정]',x+28,669,18,C.muted);text(selected===i?'● 함께 갈 친구':'○ 이 친구 선택',x+28,711,18,selected===i?C.green:C.muted,700);buttons.push({id:'pot'+i,x,y:338,w:440,h:405});}btn('title',100,846,195,69,'← 돌아가기');btn('guide',1100,840,400,80,'이 친구와 출발하기  →',true);text('사진 출처·라이선스·사용 허가 확인 전에는 실제 사진을 사용하지 않습니다.',800,962,17,C.muted,400,'center');}
-function drawGuide(){header();label('HOW TO PLAY',100,162);text('네 방향으로 기울여, 함정을 피해요.',100,224,45,C.ink,800);const cards=[['01','앞 · 뒤 · 왼쪽 · 오른쪽','화살표를 누르는 동안 판이 그 방향으로 기울어요.'],['02','손을 놓아도 계속 굴러가요','기울기는 유지돼요. 반대로 눌러 속도를 줄이세요.'],['03','모서리에만 작은 벽이 있어요','벽 없는 가장자리와 구멍에서는 떨어질 수 있어요.']];cards.forEach((a,i)=>{const y=320+i*146;fillRound(100,y,900,122,C.paper,20);text(a[0],135,y+43,25,C.orange,800);text(a[1],206,y+40,27,C.ink,700);text(a[2],206,y+84,21,C.muted);});fillRound(1050,320,450,414,'#e6ebd8',24);text('모서리의 짧은 벽을 활용해요',1275,389,29,C.orange,800,'center');text('초록 사각형은 안전 지점.',1275,468,23,C.ink,500,'center');text('닿기만 하면 바로 저장돼요.',1275,511,23,C.ink,500,'center');text('주황 막대와 금 간 판은 조심.',1275,590,21,C.ink,500,'center');text('벽 없는 구간에서는 천천히',1275,664,21,C.green,700,'center');btn('select',100,840,200,80,'← 다시 선택');btn('start',1080,840,420,80,'이야기 시작  →',true);}
+function drawSelect(){header();label('MEET YOUR ONGGI',70,155);text('어떤 옹기와 함께할까요?',70,211,42,C.ink,800);text('친구를 누르면 오른쪽에서 모양 이야기를 볼 수 있어요.',72,257,21,C.muted);
+ for(let i=0;i<COLLECTION.length;i++){const x=70+(i%3)*300,y=293+Math.floor(i/3)*241,info=COLLECTION[i];fillRound(x,y,278,219,selected===i?'#e8edda':C.paper,23);ctx.strokeStyle=selected===i?C.green:C.line;ctx.lineWidth=selected===i?4:2;round(x,y,278,219,23);ctx.stroke();text(info.name,x+139,y+154,23,C.ink,700,'center');text(info.shape,x+139,y+189,16,C.muted,500,'center');if(selected===i){fillRound(x+16,y+13,60,27,C.green,13);text('선택',x+46,y+27,15,'#fff',700,'center');}buttons.push({id:'pot'+i,x,y,w:278,h:219});}
+ const item=COLLECTION[selected];fillRound(990,293,540,460,C.paper,26);label('선택한 친구 · 게임용 별명',1020,327);text(item.name,1260,510,31,C.green,800,'center');text(item.shape,1260,552,20,C.muted,600,'center');line(1020,583,1500,583);item.lines.forEach((str,i)=>text(str,1020,618+i*34,20,C.ink));text(item.question,1020,704,17,C.green,600);fillRound(990,773,540,48,'#e9eddf',15);text('게임용 형태 설명 · 실제 소장품 정보는 확인 예정',1260,797,17,C.muted,500,'center');
+ btn('title',70,854,195,70,'← 돌아가기');btn('guide',1080,847,450,80,item.name+'와 출발하기  →',true);text('실제 사진·공식 명칭·용도·시대·출처·사용 허가는 확인 후 반영합니다.',800,965,17,C.muted,400,'center');}
+function drawGuide(){header();label('HOW TO PLAY',100,162);text('조이스틱으로 굴려, 함정을 피해요.',100,224,45,C.ink,800);const cards=[['01','조이스틱을 원하는 방향으로','조금 밀면 천천히, 많이 밀면 빠르게 기울여요.'],['02','놓으면 기울기는 그대로!','반대 방향으로 밀어 기울기와 속도를 조절해요.'],['03','모서리에만 작은 벽이 있어요','벽 없는 가장자리와 구멍에서는 떨어질 수 있어요.']];cards.forEach((a,i)=>{const y=320+i*146;fillRound(100,y,900,122,C.paper,20);text(a[0],135,y+43,25,C.orange,800);text(a[1],206,y+40,27,C.ink,700);text(a[2],206,y+84,21,C.muted);});fillRound(1050,320,450,414,'#e6ebd8',24);text('모서리의 짧은 벽을 활용해요',1275,389,29,C.orange,800,'center');text('초록 사각형은 안전 지점.',1275,468,23,C.ink,500,'center');text('닿기만 하면 바로 저장돼요.',1275,511,23,C.ink,500,'center');text('주황 막대와 금 간 판은 조심.',1275,590,21,C.ink,500,'center');text('벽 없는 구간에서는 천천히',1275,664,21,C.green,700,'center');btn('select',100,840,200,80,'← 다시 선택');btn('start',1080,840,420,80,'이야기 시작  →',true);}
 const STORY=[
  {tag:'개관 5분 전',title:'어라? 여긴 어디지?',lines:['전시 준비 수레에서 데굴데굴 내려온 작은 옹기.','눈을 떠 보니 낯선 공방 한가운데였어요.'],quote:'“여긴 내 전시대가 아닌데?”'},
  {tag:'저 멀리, 나의 이름표',title:'내 자리로 돌아가야 해!',lines:['창 너머 전시실에 익숙한 이름표가 보여요.','공방과 가마 앞을 지나면 전시실에 도착해요.'],quote:'“친구들이 오기 전에 돌아가고 싶어.”'},
  {tag:'너와 함께하는 작은 모험',title:'길을 조금 기울여 줄래?',lines:['굽은 공방 길과 가마 앞을 지나 전시실로 가요.','급할 땐 천천히. 떨어져도 안전 지점에서 다시!'],quote:'“우리, 함께 집으로 가자!”'}
 ];
 function drawStory(){header();const item=STORY[storyIndex];label(`STORY ${storyIndex+1} / 3  ·  ${item.tag}`,100,190);text(item.title,100,285,51,C.ink,800);item.lines.forEach((t,i)=>text(t,102,393+i*49,25,C.muted));fillRound(100,548,782,100,'#e6ebd8',22);text(item.quote,491,598,30,C.green,700,'center');fillRound(1000,200,480,520,'#e5e8d5',200);text('작은 옹기의 귀가 이야기',1240,751,21,C.muted,500,'center');for(let i=0;i<3;i++){ctx.fillStyle=i===storyIndex?C.green:'#ced6bf';ctx.beginPath();ctx.arc(1210+i*30,790,6,0,TAU);ctx.fill();}text('이야기 속 5분이에요. 시간 초과로 실패하지 않아요.',100,945,18,C.muted);btn('story-next',1080,840,420,80,storyIndex<2?'다음 이야기  →':'공방으로 출발!  →',true);}
-function drawBrief(){header();const st=STAGES[stage];label(st.tag+'',100,179);text(st.name+'에 도착했어요',100,260,52,C.ink,800);text(st.quote,102,352,25,C.green,600);fillRound(100,427,850,236,C.paper,26);label('이번 길의 목표',135,473);text(st.mission,135,528,32,C.ink,800);text(stage===0?'넓은 작업 마당에서 방향을 바꿔 지그재그로 돌아가요.':stage===1?'두 가마 사이 다리를 번갈아 건너요. 도구가 비킬 때 출발!':'바깥 전시 통로를 돌아, 마지막에 중앙 전시대로 들어가요.',135,595,21,C.muted);fillRound(1050,232,420,450,'#e5e8d5',190);text(stage===0?'작업 마당 + 지그재그':stage===1?'두 가마 + 세 나무 다리':'큰 순환 통로 → 중앙 전시대',1260,729,23,C.green,700,'center');btn('begin',1080,840,420,80,'조심조심 출발!  →',true);text('네 방향 버튼으로 움직여요. 떨어져도 횟수 제한 없이 재도전!',100,912,20,C.muted);}
-function tiltButton(id,x,y,arrow){const active=[...pointers.values()].includes(id)||keys.has({left:'ArrowLeft',right:'ArrowRight',up:'ArrowUp',down:'ArrowDown'}[id]);fillRound(x,y,140,110,active?C.dark:C.green,24);text(arrow,x+70,y+55,43,'#fff',800,'center');buttons.push({id,x,y,w:140,h:110});}
+function drawBrief(){header();const st=STAGES[stage];label(st.tag+'',100,179);text(st.name+'에 도착했어요',100,260,52,C.ink,800);text(st.quote,102,352,25,C.green,600);fillRound(100,427,850,236,C.paper,26);label('이번 길의 목표',135,473);text(st.mission,135,528,32,C.ink,800);text(stage===0?'넓은 작업 마당에서 방향을 바꿔 지그재그로 돌아가요.':stage===1?'두 가마 사이 다리를 번갈아 건너요. 도구가 비킬 때 출발!':'바깥 전시 통로를 돌아, 마지막에 중앙 전시대로 들어가요.',135,595,21,C.muted);fillRound(1050,232,420,450,'#e5e8d5',190);text(stage===0?'작업 마당 + 지그재그':stage===1?'두 가마 + 세 나무 다리':'큰 순환 통로 → 중앙 전시대',1260,729,23,C.green,700,'center');btn('begin',1080,840,420,80,'조심조심 출발!  →',true);text('오른쪽 조이스틱으로 기울여요. 놓으면 각도가 유지돼요.',100,912,20,C.muted);}
+function drawJoystick(){ctx.fillStyle='#e9ecdf';ctx.beginPath();ctx.arc(stick.cx,stick.cy,110,0,TAU);ctx.fill();ctx.strokeStyle='#a5b499';ctx.lineWidth=3;ctx.beginPath();ctx.arc(stick.cx,stick.cy,stick.r,0,TAU);ctx.stroke();line(stick.cx-65,stick.cy,stick.cx+65,stick.cy,'#c6cfb9',2);line(stick.cx,stick.cy-65,stick.cx,stick.cy+65,'#c6cfb9',2);ctx.fillStyle=stick.id===null?C.green:C.dark;ctx.beginPath();ctx.arc(stick.cx+stick.x*stick.r*.68,stick.cy+stick.y*stick.r*.68,36,0,TAU);ctx.fill();text('밀어서 움직이기',stick.cx,978,18,C.green,700,'center');}
 function drawPlay(){
  for(let i=0;i<STAGES.length;i++){const x=1065+i*120;fillRound(x,43,112,46,i===stage?C.green:'#e7e9dc',23);text((i<stage?'✓ ':'')+STAGES[i].name,x+56,66,16,i===stage?'#fff':C.muted,700,'center');}
  text('재도전 '+failures+'회  ·  '+(checkpoint.index>=0?'안전 지점 저장됨':'출발 지점에서 재시작'),1535,132,19,C.muted,500,'right');
  if(toastTime>0){fillRound(64,42,940,54,C.paper,27);text(toast,534,69,22,falling?C.orange:C.green,700,'center');}
- tiltButton('left',240,860,'←');tiltButton('up',500,860,'↑');tiltButton('down',980,860,'↓');tiltButton('right',1240,860,'→');
- ctx.strokeStyle='#cbd5bd';ctx.lineWidth=3;ctx.beginPath();ctx.arc(800,845,61,0,TAU);ctx.stroke();line(739,845,861,845,'#d5dcc8',2);line(800,784,800,906,'#d5dcc8',2);ctx.fillStyle=C.green;ctx.beginPath();ctx.arc(800-angle/LIMIT*53,845+tiltZ/LIMIT*53,9,0,TAU);ctx.fill();text('기울기 '+Math.round(Math.hypot(angle,tiltZ)*180/Math.PI)+'°',800,934,22,C.green,700,'center');
+ drawJoystick();
+ ctx.strokeStyle='#cbd5bd';ctx.lineWidth=3;ctx.beginPath();ctx.arc(800,845,61,0,TAU);ctx.stroke();line(739,845,861,845,'#d5dcc8',2);line(800,784,800,906,'#d5dcc8',2);ctx.fillStyle=C.green;ctx.beginPath();ctx.arc(800-angle/STICK_LIMIT*53,845+tiltZ/STICK_LIMIT*53,9,0,TAU);ctx.fill();text('기울기 '+Math.round(Math.hypot(angle,tiltZ)*180/Math.PI)+'°',800,934,22,C.green,700,'center');
  if(done){fillRound(450,333,700,216,C.paper,30);text(stage===STAGES.length-1?'내 전시대 도착!':'이 길 통과!',800,403,48,C.green,800,'center');text(stage===STAGES.length-1?'이제 친구들을 만날 준비가 됐어요.':'다음 공간으로 함께 가요.',800,477,25,C.muted,500,'center');}
 }
-function drawFinish(){header();label('WELCOME HOME',100,165);text('내 자리로 돌아왔어요!',100,237,54,C.ink,800);text('길을 기울이고 속도를 조절해 준 덕분이에요.',102,314,26,C.muted);fillRound(100,382,650,360,'#e8ecda',28);text('공방 ✓     가마 앞 ✓     전시실 ✓',425,440,21,C.green,700,'center');text('함께한 옹기 친구 '+String.fromCharCode(65+selected)+' · 재도전 '+failures+'회',425,513,31,C.ink,800,'center');text('사진 속 진짜 옹기는 곧 만나요.',425,577,24,C.muted,500,'center');text('공식 명칭 · 쓰임 · 사진 · 출처 확인 예정',425,625,20,C.muted,500,'center');text('게임 캐릭터는 실물의 정확한 복원이 아닙니다.',425,687,17,C.muted,400,'center');photoPlaceholder(900,382,570,360,selected);btn('replay',100,825,390,80,'한 번 더 도와주기  ↻',true);btn('select',520,825,280,80,'다른 옹기 만나기');text('부천시박물관 옹기 소장품을 소재로 한 체험 게임',1500,949,18,C.muted,500,'right');}
+function drawFinish(){header();label('WELCOME HOME',100,165);text('내 자리로 돌아왔어요!',100,237,54,C.ink,800);text('길을 기울이고 속도를 조절해 준 덕분이에요.',102,314,26,C.muted);fillRound(100,382,650,360,'#e8ecda',28);text('공방 ✓     가마 앞 ✓     전시실 ✓',425,440,21,C.green,700,'center');text(COLLECTION[selected].name+' · 재도전 '+failures+'회',425,513,31,C.ink,800,'center');text('사진 속 진짜 옹기는 곧 만나요.',425,577,24,C.muted,500,'center');text('공식 명칭 · 쓰임 · 사진 · 출처 확인 예정',425,625,20,C.muted,500,'center');text('게임 캐릭터는 실물의 정확한 복원이 아닙니다.',425,687,17,C.muted,400,'center');photoPlaceholder(900,382,570,360,selected);btn('replay',100,825,390,80,'한 번 더 도와주기  ↻',true);btn('select',520,825,280,80,'다른 옹기 만나기');text('부천시박물관 옹기 소장품을 소재로 한 체험 게임',1500,949,18,C.muted,500,'right');}
 function drawUI(){ctx.clearRect(0,0,W,H);buttons=[];if(screen==='title')drawTitle();if(screen==='select')drawSelect();if(screen==='guide')drawGuide();if(screen==='story')drawStory();if(screen==='brief')drawBrief();if(screen==='play')drawPlay();if(screen==='finish')drawFinish();if(portrait){fillRound(180,276,1240,448,C.paper,38);text('태블릿을 가로로 돌려 주세요',800,437,49,C.green,800,'center');text('화면을 돌리는 동안 게임은 잠시 쉬고 있어요.',800,535,26,C.muted,500,'center');buttons=[];}gl.activeTexture(gl.TEXTURE0);gl.bindTexture(gl.TEXTURE_2D,tex);gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL,false);gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,gl.RGBA,gl.UNSIGNED_BYTE,ui);dirty=false;}
 
 
@@ -212,7 +229,7 @@ function scene(clear=true){gl.disable(gl.BLEND);gl.enable(gl.DEPTH_TEST);gl.clea
  }else if(screen==='title'){
  vp=ortho(0,16,0,10,-30,30);pot(mul(translate(11.65,4.72,0),mul(rx(.14),ry(-.18))),0,0,2.0);
  }else if(screen==='select'){
- vp=ortho(0,16,0,10,-30,30);for(let i=0;i<3;i++)pot(mul(translate(3.2+4.8*i,5.15,0),mul(rx(.14),ry(-.2))),i,0,.81);
+ vp=ortho(0,16,0,10,-30,30);for(let i=0;i<COLLECTION.length;i++){const x=(70+(i%3)*300+139)/100,y=293+Math.floor(i/3)*241;pot(mul(translate(x,(H-y-83)/100,0),mul(rx(.14),ry(-.2))),i,0,.65);}pot(mul(translate(12.6,5.7,0),mul(rx(.14),ry(-.2))),selected,0,.8);
  }else if(screen==='finish'){
  vp=ortho(0,16,0,10,-30,30);pot(mul(translate(11.85,4.65,0),mul(rx(.18),ry(-.2))),selected,0,1.3);
  }else if(screen==='story'||screen==='brief'){
@@ -222,11 +239,12 @@ function scene(clear=true){gl.disable(gl.BLEND);gl.enable(gl.DEPTH_TEST);gl.clea
 function render(){gl.viewport(Math.round(layout.x*layout.dpr),Math.round((innerHeight-layout.y-layout.h)*layout.dpr),Math.round(layout.w*layout.dpr),Math.round(layout.h*layout.dpr));scene();if(dirty)drawUI();gl.disable(gl.DEPTH_TEST);gl.enable(gl.BLEND);gl.blendFunc(gl.SRC_ALPHA,gl.ONE_MINUS_SRC_ALPHA);gl.useProgram(pu);gl.bindBuffer(gl.ARRAY_BUFFER,quad);const p=gl.getAttribLocation(pu,'position');gl.enableVertexAttribArray(p);gl.vertexAttribPointer(p,2,gl.FLOAT,false,0,0);gl.activeTexture(gl.TEXTURE0);gl.bindTexture(gl.TEXTURE_2D,tex);gl.uniform1i(gl.getUniformLocation(pu,'image'),0);gl.drawArrays(gl.TRIANGLES,0,6);if(!portrait&&['title','select','finish','story','brief'].includes(screen))scene(false);}
 function resize(){const dpr=Math.min(window.devicePixelRatio||1,2),vw=innerWidth,vh=innerHeight,ratio=Math.min(vw/W,vh/H);layout={x:(vw-W*ratio)/2,y:(vh-H*ratio)/2,w:W*ratio,h:H*ratio,dpr};canvas.style.width=vw+'px';canvas.style.height=vh+'px';canvas.width=Math.round(vw*dpr);canvas.height=Math.round(vh*dpr);gl.viewport(0,0,canvas.width,canvas.height);portrait=vw<vh;clearInput();dirty=true;}
 function hit(e){const r=canvas.getBoundingClientRect(),x=(e.clientX-r.left-layout.x)/layout.w*W,y=(e.clientY-r.top-layout.y)/layout.h*H;return buttons.findLast(b=>x>=b.x&&x<=b.x+b.w&&y>=b.y&&y<=b.y+b.h);}
-function action(id){if(id.startsWith('pot')){selected=Number(id.slice(3));dirty=true;return;}clearInput();if(id==='title')screen='title';if(id==='select')screen='select';if(id==='guide')screen='guide';if(id==='start'||id==='replay'){totalTime=0;failures=0;storyIndex=0;screen='story';}if(id==='story-next'){if(storyIndex<2)storyIndex++;else startStage(0);}if(id==='begin'){screen='play';notify(STAGES[stage].tip,6);}dirty=true;}
-canvas.addEventListener('pointerdown',e=>{e.preventDefault();canvas.focus({preventScroll:true});const b=hit(e);if(!b)return;canvas.setPointerCapture(e.pointerId);if(['left','right','up','down'].includes(b.id)){if(!done&&!falling)pointers.set(e.pointerId,b.id);}else pointers.set(e.pointerId,'menu:'+b.id);dirty=true;});
-canvas.addEventListener('pointermove',e=>{if(!pointers.has(e.pointerId))return;const value=pointers.get(e.pointerId);if(['left','right','up','down','released'].includes(value)){const b=hit(e);pointers.set(e.pointerId,b&&['left','right','up','down'].includes(b.id)?b.id:'released');dirty=true;}});
-canvas.addEventListener('pointerup',e=>{const value=pointers.get(e.pointerId);pointers.delete(e.pointerId);if(value&&value.startsWith('menu:')){const b=hit(e);if(b&&value==='menu:'+b.id)action(b.id);}dirty=true;});
-canvas.addEventListener('pointercancel',e=>{pointers.delete(e.pointerId);dirty=true;});canvas.addEventListener('lostpointercapture',e=>{pointers.delete(e.pointerId);dirty=true;});
+function action(id){if(id.startsWith('pot')){const index=Number(id.slice(3));if(Number.isInteger(index)&&index>=0&&index<COLLECTION.length)selected=index;dirty=true;return;}clearInput();if(id==='title')screen='title';if(id==='select')screen='select';if(id==='guide')screen='guide';if(id==='start'||id==='replay'){totalTime=0;failures=0;storyIndex=0;screen='story';}if(id==='story-next'){if(storyIndex<2)storyIndex++;else startStage(0);}if(id==='begin'){screen='play';notify(STAGES[stage].tip,6);}dirty=true;}
+canvas.addEventListener('pointerdown',e=>{e.preventDefault();canvas.focus({preventScroll:true});const p=pointerPosition(e);if(screen==='play'&&!falling&&!done&&stick.id===null&&Math.hypot(p.x-stick.cx,p.y-stick.cy)<=125){stick.id=e.pointerId;canvas.setPointerCapture(e.pointerId);updateStick(e);return;}const b=hit(e);if(b){canvas.setPointerCapture(e.pointerId);pointers.set(e.pointerId,'menu:'+b.id);}dirty=true;});
+canvas.addEventListener('pointermove',e=>{if(e.pointerId===stick.id)updateStick(e);});
+canvas.addEventListener('pointerup',e=>{if(e.pointerId===stick.id){releaseStick();return;}const value=pointers.get(e.pointerId);pointers.delete(e.pointerId);if(value&&value.startsWith('menu:')){const b=hit(e);if(b&&value==='menu:'+b.id)action(b.id);}dirty=true;});
+canvas.addEventListener('pointercancel',e=>{if(e.pointerId===stick.id)releaseStick();pointers.delete(e.pointerId);dirty=true;});
+canvas.addEventListener('lostpointercapture',e=>{if(e.pointerId===stick.id)releaseStick();pointers.delete(e.pointerId);dirty=true;});
 window.addEventListener('keydown',e=>{if(['ArrowLeft','ArrowRight','ArrowUp','ArrowDown'].includes(e.key)&&screen==='play'){e.preventDefault();if(!done&&!falling)keys.add(e.key);dirty=true;}});window.addEventListener('keyup',e=>{keys.delete(e.key);dirty=true;});window.addEventListener('blur',clearInput);document.addEventListener('visibilitychange',()=>{clearInput();last=0;acc=0;});window.addEventListener('resize',resize);
 canvas.addEventListener('webglcontextlost',e=>{e.preventDefault();contextLost=true;clearInput();canvas.style.display='none';document.getElementById('error').style.display='block';document.getElementById('error').textContent='그래픽 연결이 잠시 끊겼어요. 페이지를 새로 열어 주세요.';});
 function frame(ms){if(contextLost)return;const dt=last?Math.min((ms-last)/1000,.08):0;last=ms;if(!document.hidden){acc+=dt;while(acc>=1/120){tick(1/120);acc-=1/120;}render();}requestAnimationFrame(frame);}
