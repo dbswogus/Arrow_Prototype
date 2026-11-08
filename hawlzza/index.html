@@ -130,8 +130,8 @@ $('motionToggle').addEventListener('click',async()=>{
   if(!navigator.mediaDevices?.getUserMedia)throw new Error('이 브라우저에서는 카메라를 사용할 수 없어요. Chrome/Edge에서 HTTPS 또는 localhost로 열어 주세요.');
   motion.stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:'user',width:{ideal:640},height:{ideal:480}},audio:false});
   const video=$('motionVideo');video.srcObject=motion.stream;await video.play();
-  if(!motion.detector){const {FilesetResolver,HandLandmarker}=await import('https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.22/vision_bundle.mjs');
-   const files=await FilesetResolver.forVisionTasks('https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.22/wasm');
+  if(!motion.detector){const {FilesetResolver,HandLandmarker}=await import('https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.21/vision_bundle.mjs');
+   const files=await FilesetResolver.forVisionTasks('https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.21/wasm');
    motion.detector=await HandLandmarker.createFromOptions(files,{baseOptions:{modelAssetPath:'https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task'},runningMode:'VIDEO',numHands:2,minHandDetectionConfidence:.65,minHandPresenceConfidence:.65,minTrackingConfidence:.65});}
   motion.enabled=true;motion.lastVideo=-1;resetGesture();P=null;$('dg').style.display='none';$('cameraBox').style.display='block';$('motionToggle').textContent='📷 카메라 끄기';statusMotion('양손을 보여 주세요. 시위 손의 엄지·검지를 벌려 준비!');motionFrame();
  }catch(e){stopMotion();statusMotion(e.name==='NotAllowedError'?'카메라 권한이 필요해요. 주소창의 카메라 권한을 허용한 후 다시 켜 주세요.':e.name==='NotFoundError'?'연결된 카메라가 없어요. 마우스로 플레이할 수 있어요.':e.message||'카메라 준비 실패. 인터넷 연결과 카메라를 확인해 주세요.');}
