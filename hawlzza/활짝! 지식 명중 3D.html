@@ -1,0 +1,139 @@
+<!doctype html>
+<html lang="ko"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>활짝! 지식 명중 3D</title>
+<style>
+:root{--bg:#2b2116;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+html,body{height:100%;margin:0;background:var(--bg);display:flex;align-items:center;justify-content:center;font-family:"Jua","Malgun Gothic","Apple SD Gothic Neo","Noto Sans KR",sans-serif;overflow:hidden;user-select:none;-webkit-user-select:none}
+#wrap{position:relative;width:min(100vw,calc(100vh*16/9));aspect-ratio:16/9;overflow:hidden;touch-action:none;background:#9bd8ff}
+#wrap canvas{width:100%;height:100%;display:block}
+#hud{position:absolute;inset:0;pointer-events:none;display:none}
+#q{position:absolute;top:2%;left:50%;transform:translateX(-50%);background:#fff8e1;color:#4a3320;border:.18em solid #e0a458;border-radius:2em;padding:.4em 1.4em;font-size:2em;font-weight:bold;max-width:84%;text-align:center}
+#info{position:absolute;top:13%;left:2%;right:2%;display:flex;justify-content:space-between;font-size:1.5em;color:#fff;text-shadow:0 .1em .2em #000}
+#cross{position:absolute;width:3.2em;height:3.2em;margin:-1.6em 0 0 -1.6em;border:.18em solid #fff;border-radius:50%;box-shadow:0 0 .4em #000;left:50%;top:45%}
+#cross:after{content:"";position:absolute;left:50%;top:50%;width:.5em;height:.5em;margin:-.25em;background:#ff5252;border-radius:50%}
+#pw{position:absolute;left:35%;right:35%;bottom:4%;height:1em;background:rgba(0,0,0,.45);border-radius:1em;overflow:hidden}
+#pw i{display:block;height:100%;width:0;background:linear-gradient(90deg,#ffd54f,#ff5252)}
+#dr{position:absolute;inset:0;width:100%;height:100%}
+#msg{position:absolute;bottom:12%;left:50%;transform:translateX(-50%);font-size:2.2em;color:#fff;text-shadow:0 .1em .2em #000;font-weight:bold;white-space:nowrap}
+#flash{position:absolute;inset:0;background:#ff1744;opacity:0;pointer-events:none}
+#ui{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(255,243,214,.5)}
+.card{background:#fff8e6;color:#4a3320;border:.25em solid #e0a458;border-radius:1.5em;padding:1em 2.2em;text-align:center;max-width:82%}
+.card h1{font-size:3em;margin:.2em 0;color:#d9822b}.card p{font-size:1.4em;margin:.4em 0}
+.b{font:inherit;font-size:1.6em;padding:.45em 1.3em;border:0;border-radius:2em;background:#ff9f43;color:#fff;box-shadow:0 .2em 0 #c9751a;margin:.4em;cursor:pointer}
+</style></head><body>
+<div id="wrap">
+<div id="hud"><div id="q"></div><div id="info"><span id="n"></span><span id="d"></span><span id="s"></span></div><svg id="dr" viewBox="0 0 1280 720"><g id="dg" style="display:none"><line id="dl" x1="0" y1="0" x2="0" y2="0" stroke="#ff7043" stroke-width="8" stroke-linecap="round" stroke-dasharray="2 14"/><circle id="da" r="22" cx="0" cy="0" fill="rgba(255,255,255,.35)" stroke="#fff" stroke-width="4"/><circle id="dp" r="30" cx="0" cy="0" fill="#ff7043" stroke="#fff" stroke-width="5"/></g></svg><div id="pw"><i></i></div><div id="msg"></div></div>
+<div id="flash"></div><div id="ui"></div></div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+/* ===== 퀴즈 데이터: 이 배열만 고치면 문제가 바뀝니다 (a = 정답 번호) ===== */
+const QUIZ=[
+{q:'활에서 화살을 걸어 당기는 줄은?',o:['활시위','화살깃','활고자'],a:0,e:'활시위는 활의 양 끝을 이어 화살을 걸어 당기는 줄이에요.'},
+{q:'우리나라 전통 활의 이름은?',o:['각궁','장검','방패'],a:0,e:'각궁은 뿔과 나무, 힘줄 등으로 만든 우리나라 전통 활이에요.'},
+{q:'화살을 담아 두는 통은?',o:['붓통','전통','물통'],a:1,e:'전통은 화살을 담아 두는 통이에요.'},
+{q:'시위를 당길 때 엄지에 끼우는 도구는?',o:['장갑','토시','깍지'],a:2,e:'깍지는 엄지손가락을 보호하고 시위를 잘 당기게 도와줘요.'},
+{q:'활쏘기를 하는 장소는?',o:['서당','활터','대장간'],a:1,e:'활터는 활을 쏘는 곳이에요. 과녁을 세워 두지요.'}];
+/* ===== 3D 장면 ===== */
+const wrap=document.getElementById('wrap'),$=id=>document.getElementById(id),V=(x,y,z)=>new THREE.Vector3(x,y,z);
+const R=new THREE.WebGLRenderer({antialias:true});wrap.prepend(R.domElement);
+const sc=new THREE.Scene();sc.background=new THREE.Color(0x9bd8ff);sc.fog=new THREE.Fog(0x9bd8ff,150,420);
+const cam=new THREE.PerspectiveCamera(70,16/9,.1,500);sc.add(cam);cam.position.set(0,2.6,0);
+sc.add(new THREE.HemisphereLight(0xffffff,0x5a7a3a,.85));const sun=new THREE.DirectionalLight(0xfff2cc,.8);sun.position.set(30,60,20);sc.add(sun);
+function fit(){const w=wrap.clientWidth,h=wrap.clientHeight;R.setSize(w,h,false);R.setPixelRatio(Math.min(devicePixelRatio,2));wrap.style.fontSize=(w/80)+'px'}addEventListener('resize',fit);fit();
+function cv(w,h,fn,rx,ry){const c=document.createElement('canvas');c.width=w;c.height=h;fn(c.getContext('2d'));const t=new THREE.CanvasTexture(c);t.anisotropy=8;if(rx){t.wrapS=t.wrapT=THREE.RepeatWrapping;t.repeat.set(rx,ry)}return t}
+const noise=(x,base,cols,n,s)=>{x.fillStyle=base;x.fillRect(0,0,256,256);for(let i=0;i<n;i++){x.fillStyle=cols[i%cols.length];x.beginPath();x.arc(Math.random()*256,Math.random()*256,Math.random()*s+1,0,7);x.fill()}};
+const ground=new THREE.Mesh(new THREE.PlaneGeometry(500,2600),new THREE.MeshLambertMaterial({map:cv(256,256,x=>noise(x,'#63b24d',['#4f9a3c','#79c75f','#58a843'],500,6),75,390)}));ground.rotation.x=-Math.PI/2;ground.position.z=-1100;sc.add(ground);
+const trk=new THREE.Mesh(new THREE.PlaneGeometry(15,2600),new THREE.MeshLambertMaterial({map:cv(256,256,x=>noise(x,'#d2a86b',['#b98d54','#e2bd82','#9c7a4a'],600,4),3,390)}));trk.rotation.x=-Math.PI/2;trk.position.set(0,.03,-1100);sc.add(trk);
+const dm=new THREE.Object3D();
+const mk=(g,c,N)=>new THREE.InstancedMesh(g,new THREE.MeshLambertMaterial({color:c}),N);
+const NT=110,tr=mk(new THREE.CylinderGeometry(.4,.5,3,6),0x7b4a2a,NT),fo=mk(new THREE.ConeGeometry(2.6,7,7),0x2e8b4f,NT);
+for(let i=0;i<NT;i++){const x=(Math.random()<.5?-1:1)*(14+Math.random()*70),z=50-Math.random()*1250,s=.8+Math.random()*.8;dm.scale.setScalar(s);dm.position.set(x,1.5*s,z);dm.updateMatrix();tr.setMatrixAt(i,dm.matrix);dm.position.y=6.5*s;dm.updateMatrix();fo.setMatrixAt(i,dm.matrix)}sc.add(tr,fo);
+const NP=260,po=mk(new THREE.BoxGeometry(.35,1.8,.35),0x8b5a2b,NP);dm.scale.setScalar(1);
+for(let i=0;i<NP;i++){dm.position.set(i%2?10:-10,.9,50-(i>>1)*10);dm.updateMatrix();po.setMatrixAt(i,dm.matrix)}sc.add(po);
+[.6,1.3].forEach(y=>[-10,10].forEach(x=>{const r=new THREE.Mesh(new THREE.BoxGeometry(.14,.14,1300),new THREE.MeshLambertMaterial({color:0xa06a35}));r.position.set(x,y,-600);sc.add(r)}));
+const far=new THREE.Group();sc.add(far);
+for(let i=0;i<12;i++){const h=40+Math.random()*50,m=new THREE.Mesh(new THREE.ConeGeometry(h*.9,h,5),new THREE.MeshBasicMaterial({color:i%2?0x8fb4bd:0x7aa3a8,fog:false}));m.position.set(-300+i*55,h/2-2,-300);far.add(m)}
+const sm=new THREE.Mesh(new THREE.SphereGeometry(16,16,12),new THREE.MeshBasicMaterial({color:0xfff176,fog:false}));sm.position.set(110,110,-380);far.add(sm);
+/* 말(1인칭) + 활 */
+const brown=new THREE.MeshLambertMaterial({color:0x8d5524}),dark=new THREE.MeshLambertMaterial({color:0x2b1a0e});
+const horse=new THREE.Group();cam.add(horse);horse.position.set(0,-1.35,-1.5);
+const neck=new THREE.Mesh(new THREE.CylinderGeometry(.24,.38,1.9,10),brown);neck.rotation.x=-.95;neck.position.set(0,-.45,.5);horse.add(neck);
+const head=new THREE.Mesh(new THREE.BoxGeometry(.42,.5,1),brown);head.position.set(0,.35,-.55);head.rotation.x=.45;horse.add(head);
+[-.14,.14].forEach(x=>{const e=new THREE.Mesh(new THREE.ConeGeometry(.08,.3,5),dark);e.position.set(x,.72,-.15);horse.add(e)});
+for(let i=0;i<7;i++){const m=new THREE.Mesh(new THREE.BoxGeometry(.1,.38,.3),dark);m.position.set(0,.5-i*.12,-.05+i*.3);m.rotation.x=-.95;horse.add(m)}
+const rig=new THREE.Group();cam.add(rig);const bow=new THREE.Group();rig.add(bow);bow.position.set(.6,-.2,-1.15);bow.scale.setScalar(.85);
+/* 각궁 형태: 줌통(손잡이)은 시위 쪽으로, 양쪽 팔은 바깥으로 휘고 끝(고자)은 다시 젖혀지는 M자형 */
+const S=.002,Hf=[[0,88],[40,100],[110,106],[170,90],[220,55],[260,25],[295,4],[325,13],[355,32]],pts=[];
+for(let i=Hf.length-1;i>=0;i--)pts.push(V(0,Hf[i][0]*S,-Hf[i][1]*S));for(let i=1;i<Hf.length;i++)pts.push(V(0,-Hf[i][0]*S,-Hf[i][1]*S));
+bow.add(new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts),90,.021,8),new THREE.MeshLambertMaterial({color:0xb87d3b})));
+const dc=(r,h,y,z,c)=>{const m=new THREE.Mesh(new THREE.CylinderGeometry(r,r,h,10),new THREE.MeshLambertMaterial({color:c}));m.position.set(0,y,z);bow.add(m);return m};
+dc(.036,.14,0,-.178,0xf1e8d0);[1,-1].forEach(k=>{dc(.027,.04,k*.59,-.01,0xb23a2a);dc(.027,.035,k*.705,-.062,0x2f6fb0)});
+const sg=new THREE.BufferGeometry().setFromPoints([V(0,-.65,-.026),V(-.045,0,0),V(0,.65,-.026)]),str=new THREE.Line(sg,new THREE.LineBasicMaterial({color:0xfaf5e8}));bow.add(str);
+const rw=dc(.008,.14,0,0,0xc0392b);rw.position.x=-.045;
+/* 화살: 대나무 살대, 새 깃, 붉은 오늬 부분, 노란 감개와 어두운 촉 */
+function mkArrow(){const a=new THREE.Group(),M=c=>new THREE.MeshLambertMaterial({color:c}),Y=(r,h,y,c)=>{const m=new THREE.Mesh(new THREE.CylinderGeometry(r,r,h,6),M(c));m.position.y=y;a.add(m)};
+ Y(.011,1,0,0xc79a4b);Y(.014,.05,-.47,0x8b3a1a);Y(.014,.07,.42,0xd9a52e);Y(.02,.05,.47,0x2b2b2b);
+ const h=new THREE.Mesh(new THREE.ConeGeometry(.02,.1,6),M(0x2b2b2b));h.position.y=.55;a.add(h);
+ [0,2.09,4.19].forEach(r=>{const g=new THREE.Group(),f=new THREE.Mesh(new THREE.BoxGeometry(.045,.2,.004),M(0x8f7a5c));f.position.set(.025,-.35,0);g.add(f);g.rotation.y=r;a.add(g)});return a}
+const nock=new THREE.Group(),na=mkArrow();na.rotation.x=-Math.PI/2;na.position.z=-.5;nock.add(na);bow.add(nock);
+/* 화살 예상 경로(점선) */
+const TN=46,tp=new Float32Array(TN*3),traj=new THREE.InstancedMesh(new THREE.SphereGeometry(1,8,6),new THREE.MeshBasicMaterial({color:0xfff176,depthTest:false,transparent:true,opacity:.95}),TN),tdm=new THREE.Object3D();traj.renderOrder=9;traj.frustumCulled=false;traj.count=0;sc.add(traj);
+const mk2=new THREE.Mesh(new THREE.RingGeometry(.6,.95,24),new THREE.MeshBasicMaterial({color:0xff5252,side:THREE.DoubleSide,depthTest:false,transparent:true,opacity:.85}));mk2.renderOrder=10;sc.add(mk2);
+/* ===== 게임 로직 ===== */
+let state='menu',qi=0,score=0,gateZ=0,walls=[],cleared=0,speed=0,hold=0,charging=0,cool=0,arrows=[],frags=[],T=0,timer=0,aim={x:0,y:.12},cur=0,crash='',wrong=0,ct=0;
+const say=(s,d=1.6)=>{$('msg').textContent=s;setTimeout(()=>{if($('msg').textContent==s)$('msg').textContent=''},d*1000)};
+function scr(h){$('ui').innerHTML='<div class="card">'+h+'</div>';$('ui').style.display='flex';$('hud').style.display='none';wrap.style.cursor=''}
+function menu(){state='menu';scr('<div style="font-size:3.4em">🐎🏹</div><h1>활짝! 지식 명중 3D</h1><p>말을 타고 달리며 정답이 적힌 벽을 활로 맞혀라!<br>정답을 못 맞히면 벽에 부딪혀 게임 끝!</p><button class="b" onclick="howto()">게임 방법</button><button class="b" onclick="start()">시작하기</button>')}
+function howto(){scr('<h1>게임 방법</h1><p>👇 화면을 누른 채 뒤로(아래로) 쭈욱 당겨요<br>🟡 노란 점선이 화살이 날아갈 길이에요. 많이 당길수록 힘이 세요<br>↔️ 당기는 방향의 반대쪽으로 날아가요 (왼쪽으로 당기면 오른쪽으로!)<br>🏹 손을 떼면 점선 그대로 발사! 정답 벽을 맞혀요<br>⚠️ 정답 벽을 못 맞히면 벽에 부딪혀요</p><button class="b" onclick="menu()">알겠어요!</button>')}
+function start(){qi=0;score=0;cam.position.set(0,2.6,0);cam.rotation.set(0,0,0);pull=0;charging=0;P=null;aimY=0;aimP=.06;$('dg').style.display='none';say('👇 화면을 누르고 뒤로 당겨 보세요! 점선이 화살이 날아갈 길이에요',6);$('flash').style.opacity=0;wrong=0;clearGate();gateZ=-130;makeGate();state='run';cleared=0;crash='';$('ui').style.display='none';$('hud').style.display='block';wrap.style.cursor='none';setQ()}
+function setQ(){$('q').textContent='Q'+(qi+1)+'. '+QUIZ[qi].q;$('n').textContent='문제 '+(qi+1)+'/'+QUIZ.length;$('s').textContent='점수 '+score}
+function wtex(t,c){return cv(512,448,x=>{const rr=(a,b,w,h,r)=>{x.beginPath();x.roundRect?x.roundRect(a,b,w,h,r):x.rect(a,b,w,h)};
+ x.fillStyle='#2b2620';x.fillRect(0,0,512,448);const gr=['#8f887b','#7b7468','#a29a8b','#6e685d','#968d7c','#857b6a','#9a8f78'];
+ for(let y=0,r=0;y<448;r++){const h=50+Math.random()*36;let xx=-((r*37)%60)-10;while(xx<512){const w=70+Math.random()*75;x.fillStyle=gr[(Math.random()*gr.length)|0];rr(xx+3,y+3,w-6,h-6,16);x.fill();x.fillStyle='rgba(255,255,255,.14)';rr(xx+8,y+6,w-18,(h-6)*.38,12);x.fill();x.fillStyle='rgba(0,0,0,.2)';for(let i=0;i<14;i++)x.fillRect(xx+8+Math.random()*(w-20),y+8+Math.random()*(h-20),2,2);if(Math.random()<.2){x.fillStyle='rgba(90,130,60,.45)';rr(xx+6,y+h-16,w*.5,9,5);x.fill()}xx+=w}y+=h}
+ x.fillStyle='#4a3320';rr(20,104,472,240,30);x.fill();x.fillStyle=c;rr(32,116,448,216,22);x.fill();
+ x.font='bold '+Math.min(170,Math.floor(410/t.length))+'px "Jua","Malgun Gothic",sans-serif';x.textAlign='center';x.textBaseline='middle';x.lineWidth=14;x.lineJoin='round';x.strokeStyle='#2a1c10';x.strokeText(t,256,226);x.fillStyle='#fff';x.fillText(t,256,226)})}
+function clearGate(){walls.forEach(w=>{sc.remove(w.m)});walls=[]}
+function makeGate(){const Q=QUIZ[qi],ord=[0,1,2].sort(()=>Math.random()-.5),cs=['#b03a2e','#2f6fb0','#3a8a4a'];
+ ord.forEach((oi,k)=>{const m=new THREE.Mesh(new THREE.BoxGeometry(8,7,.8),new THREE.MeshBasicMaterial({map:wtex(Q.o[oi],cs[k])}));m.position.set(-8.8+k*8.8,3.5,gateZ);sc.add(m);walls.push({m,ok:oi==Q.a,c:cs[k]})})}
+function shatter(w){const g=new THREE.BoxGeometry(.5,.5,.5),mt=new THREE.MeshLambertMaterial({color:0x8a8478});for(let i=0;i<22;i++){const f=new THREE.Mesh(g,mt);f.position.copy(w.m.position).add(V((Math.random()-.5)*8,(Math.random()-.5)*7,0));sc.add(f);frags.push({m:f,v:V((Math.random()-.5)*10,Math.random()*9,-Math.random()*8-2),l:2.2})}sc.remove(w.m)}
+function hit(w){if(w.ok){cleared=1;wrong=0;score+=100+(qi*10);walls.forEach(shatter);walls=[];say('⭐ 정답! 벽이 와르르!',1.8);setQ();timer=1.3}else{wrong=1;say('앗! 오답이에요! 벽이 꿈쩍도 안 해요!',2)}}
+function fail(r){crash=wrong?'오답을 맞혀서 길이 열리지 않았어요. 벽에 부딪혔어요!':r;state='crash';ct=0;speed=0;timer=1.9;charging=0;const f=$('flash');f.style.transition='none';f.style.opacity=.75;setTimeout(()=>{f.style.transition='opacity .9s';f.style.opacity=0},60);
+ const mt=new THREE.MeshLambertMaterial({color:0xc9a66b}),g=new THREE.BoxGeometry(.4,.4,.4);for(let i=0;i<40;i++){const m=new THREE.Mesh(g,mt);m.position.set(cam.position.x+(Math.random()-.5)*5,.5,cam.position.z-2-Math.random());sc.add(m);frags.push({m,v:V((Math.random()-.5)*8,Math.random()*9+2,Math.random()*6),l:2})}
+ say('우당탕! 넘어졌어요 😵',2.2)}
+function over(){const Q=QUIZ[qi];state='over';scr('<h1>💥 아쉬워요!</h1><p>'+crash+'</p><p>정답은 <b style="color:#d9822b;font-size:1.3em">'+Q.o[Q.a]+'</b></p><p>'+Q.e+'</p><button class="b" onclick="start()">다시 도전</button>')}
+function win(){state='over';const t=score>=520?'명궁 장군':score>=400?'신궁 어린이':'꿈나무 궁수';scr('<h1>🏆 질주 성공!</h1><p>총점 <b>'+score+'</b>점</p><p>나의 칭호: <b style="color:#d9822b;font-size:1.4em">'+t+'</b></p><button class="b" onclick="start()">다시 하기</button>')}
+/* 입력: 화면을 누르고 뒤로 당기면 예상 경로(점선)가 나오고, 놓으면 그대로 발사 */
+const cl=(v,a,b)=>Math.max(a,Math.min(b,v)),L=210;let aimY=0,aimP=.06,pull=0,P=null;
+function dragSet(e){const r=wrap.getBoundingClientRect(),k=1280/r.width;let dx=(e.clientX-P.x)*k,dy=(e.clientY-P.y)*k,l=Math.hypot(dx,dy);if(l>L){dx*=L/l;dy*=L/l;l=L}pull=l/L;aimY=cl(-(dx/L)*.22,-.3,.3);aimP=cl((dy/L)*.15,-.05,.2);$('dl').setAttribute('x2',P.x0+dx);$('dl').setAttribute('y2',P.y0+dy);$('dp').setAttribute('cx',P.x0+dx);$('dp').setAttribute('cy',P.y0+dy)}
+wrap.addEventListener('pointerdown',e=>{if(state!='run'||P)return;const r=wrap.getBoundingClientRect(),k=1280/r.width;P={id:e.pointerId,x:e.clientX,y:e.clientY,x0:(e.clientX-r.left)*k,y0:(e.clientY-r.top)*k};try{wrap.setPointerCapture(e.pointerId)}catch(_){}charging=1;pull=0;['dl','da','dp'].forEach(i=>{const q=$(i);q.setAttribute(i=='dl'?'x1':'cx',P.x0);q.setAttribute(i=='dl'?'y1':'cy',P.y0)});$('dg').style.display='';dragSet(e)});
+wrap.addEventListener('pointermove',e=>{if(P&&e.pointerId==P.id&&state=='run')dragSet(e)});
+function up(e){if(!P||e.pointerId!=P.id)return;P=null;const w=pull;charging=0;pull=0;$('dg').style.display='none';if(state=='run'&&w>.1)release(w)}
+wrap.addEventListener('pointerup',up);wrap.addEventListener('pointercancel',up);
+function release(w){if(cool>0||state!='run')return;rig.rotation.set(aimP,-aimY,0,'YXZ');cam.updateMatrixWorld(true);const sp=55+60*Math.max(.3,w),dir=V(0,0,-1).applyEuler(rig.rotation).applyQuaternion(cam.quaternion),a=mkArrow();a.position.copy(bow.localToWorld(V(-.045,0,-.5)));sc.add(a);arrows.push({m:a,v:dir.multiplyScalar(sp).add(V(0,0,-speed)),l:3.5});cool=.45}
+function trajUpdate(pw){const on=state=='run'&&charging;traj.visible=on;if(!on){mk2.visible=false;return}const sp=55+60*Math.max(.3,pw),dir=V(0,0,-1).applyEuler(rig.rotation).applyQuaternion(cam.quaternion),p0=bow.localToWorld(V(-.045,0,-.5)),v=dir.multiplyScalar(sp).add(V(0,0,-speed));let n=0,hp=null,pr=p0.clone();const zf=walls.length&&!cleared?gateZ+.4:-1e9;
+ for(let i=0;i<TN;i++){const t=i*.06,x=p0.x+v.x*t,y=p0.y+v.y*t-2.5*t*t,z=p0.z+v.z*t;if(y<0)break;if(z<=zf&&i>0){const k=(pr.z-zf)/(pr.z-z);hp=V(pr.x+(x-pr.x)*k,pr.y+(y-pr.y)*k,zf);tp[n*3]=hp.x;tp[n*3+1]=hp.y;tp[n*3+2]=hp.z;n++;break}tp[n*3]=x;tp[n*3+1]=y;tp[n*3+2]=z;n++;pr.set(x,y,z)}
+ let c=0;for(let i=0;i<n;i++){const q=V(tp[i*3],tp[i*3+1],tp[i*3+2]),d=cam.position.distanceTo(q);if(d<4)continue;tdm.position.copy(q);tdm.scale.setScalar(Math.min(1.2,d*.009));tdm.updateMatrix();traj.setMatrixAt(c++,tdm.matrix)}traj.count=c;traj.instanceMatrix.needsUpdate=true;
+ mk2.visible=!!hp;if(hp){mk2.position.copy(hp);mk2.quaternion.copy(cam.quaternion);mk2.scale.setScalar(Math.max(.5,cam.position.distanceTo(hp)/35))}}
+/* 루프 */
+let last=0;
+function loop(t){requestAnimationFrame(loop);const dt=Math.min(.05,(t-last)/1000||0);last=t;T+=dt;cool-=dt;
+ if(state=='run'||state=='dying'){const tgt=state=='run'?11+qi*1.6:0;speed+=(tgt-speed)*Math.min(1,dt*3);cam.position.z-=speed*dt;
+  cam.position.y=2.6+Math.sin(T*9)*.06*Math.min(1,speed/10);cam.rotation.z=Math.sin(T*4.5)*.01;horse.rotation.x=Math.sin(T*9+1)*.04}
+ if(state=='crash'){ct+=dt;const k=Math.min(1,ct/.8),e=k*k*(3-2*k);cam.position.y=2.6-1.95*e+Math.sin(ct*30)*.05*(1-k);cam.rotation.x=-.55*e;cam.rotation.z=1.15*e;cam.position.z+=dt*3*(1-k);horse.rotation.x=-.5*e;timer-=dt;if(timer<=0)over()}
+ far.position.z=cam.position.z;
+ 
+ const pw=pull,pl=pw*.38;str.geometry.attributes.position.setXYZ(1,-.045,0,pl);str.geometry.attributes.position.needsUpdate=true;nock.position.set(-.045,0,pl);rw.position.z=pl;nock.visible=state=='run'&&cool<=0;
+ rig.rotation.set(aimP,-aimY,0,'YXZ');$('pw').firstElementChild.style.width=pw*100+'%';cam.updateMatrixWorld(true);trajUpdate(pw);
+ if(state=='run'){const d=cam.position.z-(gateZ+.4);$('d').textContent=cleared?'':'벽까지 '+Math.max(0,d|0)+'m';
+  if(!cleared&&d<1.1)fail('벽에 부딪혔어요! 정답을 맞히지 못했어요.');
+  if(cleared){timer-=dt;if(timer<=0){cleared=0;if(qi>=QUIZ.length-1){state='won';timer=1.2}else{qi++;gateZ=cam.position.z-130;makeGate();setQ()}}}}
+ else if(state=='won'){cam.position.z-=speed*dt;timer-=dt;if(timer<=0)win()}
+ else if(state=='dying'){timer-=dt;if(timer<=0)over()}
+ for(let i=arrows.length-1;i>=0;i--){const a=arrows[i],p0=a.m.position.clone();a.v.y-=5*dt;a.m.position.addScaledVector(a.v,dt);a.m.quaternion.setFromUnitVectors(V(0,1,0),a.v.clone().normalize());a.l-=dt;let rm=a.l<=0||a.m.position.y<0;
+  if(!rm&&state=='run'&&!cleared){const zf=gateZ+.4,p1=a.m.position;if(p0.z>zf&&p1.z<=zf){const k=(p0.z-zf)/(p0.z-p1.z),hx=p0.x+(p1.x-p0.x)*k,hy=p0.y+(p1.y-p0.y)*k;for(const w of walls)if(Math.abs(hx-w.m.position.x)<4&&hy>0&&hy<7){rm=1;hit(w);break}}}
+  if(rm){sc.remove(a.m);arrows.splice(i,1)}}
+ for(let i=frags.length-1;i>=0;i--){const f=frags[i];f.v.y-=18*dt;f.m.position.addScaledVector(f.v,dt);f.m.rotation.x+=dt*5;f.m.rotation.y+=dt*4;f.l-=dt;if(f.l<=0||f.m.position.y<0){sc.remove(f.m);frags.splice(i,1)}}
+ R.render(sc,cam)}
+menu();requestAnimationFrame(loop);
+</script></body></html>
