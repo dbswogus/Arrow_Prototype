@@ -21,10 +21,12 @@ html,body{height:100%;margin:0;background:var(--bg);display:flex;align-items:cen
 .card{background:#fff8e6;color:#4a3320;border:.25em solid #e0a458;border-radius:1.5em;padding:1em 2.2em;text-align:center;max-width:82%}
 .card h1{font-size:3em;margin:.2em 0;color:#d9822b}.card p{font-size:1.4em;margin:.4em 0}
 .b{font:inherit;font-size:1.6em;padding:.45em 1.3em;border:0;border-radius:2em;background:#ff9f43;color:#fff;box-shadow:0 .2em 0 #c9751a;margin:.4em;cursor:pointer}
+
+#motionBar{position:absolute;left:2%;bottom:2%;z-index:5;max-width:30%;color:white;font-size:1em;background:#302417dd;padding:.6em;border-radius:.8em}#motionBar button{font:inherit;cursor:pointer;border:0;border-radius:1em;padding:.5em .8em;background:#ffb34d;color:#302417}#motionStatus{margin-top:.4em;line-height:1.4}#cameraBox{display:none;position:absolute;right:1.5%;bottom:2%;width:21%;aspect-ratio:4/3;border:2px solid #fff;border-radius:.8em;overflow:hidden;background:#171717;z-index:4}#cameraBox video,#cameraBox canvas{position:absolute;width:100%;height:100%;object-fit:fill;transform:scaleX(-1)}
 </style></head><body>
 <div id="wrap">
 <div id="hud"><div id="q"></div><div id="info"><span id="n"></span><span id="d"></span><span id="s"></span></div><svg id="dr" viewBox="0 0 1280 720"><g id="dg" style="display:none"><line id="dl" x1="0" y1="0" x2="0" y2="0" stroke="#ff7043" stroke-width="8" stroke-linecap="round" stroke-dasharray="2 14"/><circle id="da" r="22" cx="0" cy="0" fill="rgba(255,255,255,.35)" stroke="#fff" stroke-width="4"/><circle id="dp" r="30" cx="0" cy="0" fill="#ff7043" stroke="#fff" stroke-width="5"/></g></svg><div id="pw"><i></i></div><div id="msg"></div></div>
-<div id="flash"></div><div id="ui"></div></div>
+<div id="motionBar"><button id="motionToggle" type="button">📷 모션캡처 켜기</button><div id="motionStatus" role="status" aria-live="polite">마우스 / 터치로도 플레이할 수 있어요.</div></div><div id="cameraBox"><video id="motionVideo" autoplay muted playsinline></video><canvas id="motionCanvas" width="640" height="480"></canvas></div><div id="flash"></div><div id="ui"></div></div>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script>
 /* ===== 퀴즈 데이터: 이 배열만 고치면 문제가 바뀝니다 (a = 정답 번호) ===== */
@@ -85,8 +87,8 @@ let state='menu',qi=0,score=0,gateZ=0,walls=[],cleared=0,speed=0,hold=0,charging
 const say=(s,d=1.6)=>{$('msg').textContent=s;setTimeout(()=>{if($('msg').textContent==s)$('msg').textContent=''},d*1000)};
 function scr(h){$('ui').innerHTML='<div class="card">'+h+'</div>';$('ui').style.display='flex';$('hud').style.display='none';wrap.style.cursor=''}
 function menu(){state='menu';scr('<div style="font-size:3.4em">🐎🏹</div><h1>활짝! 지식 명중 3D</h1><p>말을 타고 달리며 정답이 적힌 벽을 활로 맞혀라!<br>정답을 못 맞히면 벽에 부딪혀 게임 끝!</p><button class="b" onclick="howto()">게임 방법</button><button class="b" onclick="start()">시작하기</button>')}
-function howto(){scr('<h1>게임 방법</h1><p>👇 화면을 누른 채 뒤로(아래로) 쭈욱 당겨요<br>🟡 노란 점선이 화살이 날아갈 길이에요. 많이 당길수록 힘이 세요<br>↔️ 당기는 방향의 반대쪽으로 날아가요 (왼쪽으로 당기면 오른쪽으로!)<br>🏹 손을 떼면 점선 그대로 발사! 정답 벽을 맞혀요<br>⚠️ 정답 벽을 못 맞히면 벽에 부딪혀요</p><button class="b" onclick="menu()">알겠어요!</button>')}
-function start(){qi=0;score=0;cam.position.set(0,2.6,0);cam.rotation.set(0,0,0);pull=0;charging=0;P=null;aimY=0;aimP=.06;$('dg').style.display='none';say('👇 화면을 누르고 뒤로 당겨 보세요! 점선이 화살이 날아갈 길이에요',6);$('flash').style.opacity=0;wrong=0;clearGate();gateZ=-130;makeGate();state='run';cleared=0;crash='';$('ui').style.display='none';$('hud').style.display='block';wrap.style.cursor='none';setQ()}
+function howto(){scr('<h1>게임 방법</h1><p>📷 모션캡처: 두 손을 카메라에 보여 주세요.<br>시위 손의 엄지·검지를 모은 채 두 손을 벌려 당기고, 손가락을 펴면 발사!<br>활 손을 좌우·위아래로 움직여 노란 점선을 조준해요.<br>👇 마우스 / 터치: 화면을 누른 채 뒤로(아래로) 쭈욱 당겨요<br>🟡 노란 점선이 화살이 날아갈 길이에요. 많이 당길수록 힘이 세요<br>↔️ 당기는 방향의 반대쪽으로 날아가요 (왼쪽으로 당기면 오른쪽으로!)<br>🏹 손을 떼면 점선 그대로 발사! 정답 벽을 맞혀요<br>⚠️ 정답 벽을 못 맞히면 벽에 부딪혀요</p><button class="b" onclick="menu()">알겠어요!</button>')}
+function start(){resetGesture();qi=0;score=0;cam.position.set(0,2.6,0);cam.rotation.set(0,0,0);pull=0;charging=0;P=null;aimY=0;aimP=.06;$('dg').style.display='none';say('👇 화면을 누르고 뒤로 당겨 보세요! 점선이 화살이 날아갈 길이에요',6);$('flash').style.opacity=0;wrong=0;clearGate();gateZ=-130;makeGate();state='run';cleared=0;crash='';$('ui').style.display='none';$('hud').style.display='block';wrap.style.cursor='none';setQ()}
 function setQ(){$('q').textContent='Q'+(qi+1)+'. '+QUIZ[qi].q;$('n').textContent='문제 '+(qi+1)+'/'+QUIZ.length;$('s').textContent='점수 '+score}
 function wtex(t,c){return cv(512,448,x=>{const rr=(a,b,w,h,r)=>{x.beginPath();x.roundRect?x.roundRect(a,b,w,h,r):x.rect(a,b,w,h)};
  x.fillStyle='#2b2620';x.fillRect(0,0,512,448);const gr=['#8f887b','#7b7468','#a29a8b','#6e685d','#968d7c','#857b6a','#9a8f78'];
@@ -106,19 +108,72 @@ function win(){state='over';const t=score>=520?'명궁 장군':score>=400?'신�
 /* 입력: 화면을 누르고 뒤로 당기면 예상 경로(점선)가 나오고, 놓으면 그대로 발사 */
 const cl=(v,a,b)=>Math.max(a,Math.min(b,v)),L=210;let aimY=0,aimP=.06,pull=0,P=null;
 function dragSet(e){const r=wrap.getBoundingClientRect(),k=1280/r.width;let dx=(e.clientX-P.x)*k,dy=(e.clientY-P.y)*k,l=Math.hypot(dx,dy);if(l>L){dx*=L/l;dy*=L/l;l=L}pull=l/L;aimY=cl(-(dx/L)*.22,-.3,.3);aimP=cl((dy/L)*.15,-.05,.2);$('dl').setAttribute('x2',P.x0+dx);$('dl').setAttribute('y2',P.y0+dy);$('dp').setAttribute('cx',P.x0+dx);$('dp').setAttribute('cy',P.y0+dy)}
-wrap.addEventListener('pointerdown',e=>{if(state!='run'||P)return;const r=wrap.getBoundingClientRect(),k=1280/r.width;P={id:e.pointerId,x:e.clientX,y:e.clientY,x0:(e.clientX-r.left)*k,y0:(e.clientY-r.top)*k};try{wrap.setPointerCapture(e.pointerId)}catch(_){}charging=1;pull=0;['dl','da','dp'].forEach(i=>{const q=$(i);q.setAttribute(i=='dl'?'x1':'cx',P.x0);q.setAttribute(i=='dl'?'y1':'cy',P.y0)});$('dg').style.display='';dragSet(e)});
+wrap.addEventListener('pointerdown',e=>{if(state!='run'||P||motion.enabled)return;const r=wrap.getBoundingClientRect(),k=1280/r.width;P={id:e.pointerId,x:e.clientX,y:e.clientY,x0:(e.clientX-r.left)*k,y0:(e.clientY-r.top)*k};try{wrap.setPointerCapture(e.pointerId)}catch(_){}charging=1;pull=0;['dl','da','dp'].forEach(i=>{const q=$(i);q.setAttribute(i=='dl'?'x1':'cx',P.x0);q.setAttribute(i=='dl'?'y1':'cy',P.y0)});$('dg').style.display='';dragSet(e)});
 wrap.addEventListener('pointermove',e=>{if(P&&e.pointerId==P.id&&state=='run')dragSet(e)});
 function up(e){if(!P||e.pointerId!=P.id)return;P=null;const w=pull;charging=0;pull=0;$('dg').style.display='none';if(state=='run'&&w>.1)release(w)}
-wrap.addEventListener('pointerup',up);wrap.addEventListener('pointercancel',up);
+wrap.addEventListener('pointerup',up);wrap.addEventListener('pointercancel',()=>{P=null;charging=0;pull=0;$('dg').style.display='none'});
 function release(w){if(cool>0||state!='run')return;rig.rotation.set(aimP,-aimY,0,'YXZ');cam.updateMatrixWorld(true);const sp=55+60*Math.max(.3,w),dir=V(0,0,-1).applyEuler(rig.rotation).applyQuaternion(cam.quaternion),a=mkArrow();a.position.copy(bow.localToWorld(V(-.045,0,-.5)));sc.add(a);arrows.push({m:a,v:dir.multiplyScalar(sp).add(V(0,0,-speed)),l:3.5});cool=.45}
 function trajUpdate(pw){const on=state=='run'&&charging;traj.visible=on;if(!on){mk2.visible=false;return}const sp=55+60*Math.max(.3,pw),dir=V(0,0,-1).applyEuler(rig.rotation).applyQuaternion(cam.quaternion),p0=bow.localToWorld(V(-.045,0,-.5)),v=dir.multiplyScalar(sp).add(V(0,0,-speed));let n=0,hp=null,pr=p0.clone();const zf=walls.length&&!cleared?gateZ+.4:-1e9;
  for(let i=0;i<TN;i++){const t=i*.06,x=p0.x+v.x*t,y=p0.y+v.y*t-2.5*t*t,z=p0.z+v.z*t;if(y<0)break;if(z<=zf&&i>0){const k=(pr.z-zf)/(pr.z-z);hp=V(pr.x+(x-pr.x)*k,pr.y+(y-pr.y)*k,zf);tp[n*3]=hp.x;tp[n*3+1]=hp.y;tp[n*3+2]=hp.z;n++;break}tp[n*3]=x;tp[n*3+1]=y;tp[n*3+2]=z;n++;pr.set(x,y,z)}
  let c=0;for(let i=0;i<n;i++){const q=V(tp[i*3],tp[i*3+1],tp[i*3+2]),d=cam.position.distanceTo(q);if(d<4)continue;tdm.position.copy(q);tdm.scale.setScalar(Math.min(1.2,d*.009));tdm.updateMatrix();traj.setMatrixAt(c++,tdm.matrix)}traj.count=c;traj.instanceMatrix.needsUpdate=true;
  mk2.visible=!!hp;if(hp){mk2.position.copy(hp);mk2.quaternion.copy(cam.quaternion);mk2.scale.setScalar(Math.max(.5,cam.position.distanceTo(hp)/35))}}
+/* 웹캠 손 모션: 영상은 브라우저 안에서만 처리 */
+const motion={enabled:false,loading:false,ready:false,detector:null,stream:null,raf:0,lastVideo:-1,lastDetect:0,gesture:null,stable:0,open:0,needOpen:true};
+const statusMotion=t=>{if($('motionStatus').textContent!==t)$('motionStatus').textContent=t};
+function resetGesture(){motion.gesture=null;motion.stable=0;motion.open=0;motion.needOpen=true;motion.ready=false;charging=0;pull=0;}
+function stopMotion(){motion.enabled=false;cancelAnimationFrame(motion.raf);if(motion.stream)motion.stream.getTracks().forEach(t=>t.stop());motion.stream=null;$('motionVideo').srcObject=null;$('cameraBox').style.display='none';$('motionToggle').textContent='📷 모션캡처 켜기';resetGesture();statusMotion('마우스 / 터치로 플레이할 수 있어요.');}
+$('motionToggle').addEventListener('pointerdown',e=>e.stopPropagation());
+$('motionToggle').addEventListener('click',async()=>{
+ if(motion.enabled){stopMotion();return}if(motion.loading)return;
+ motion.loading=true;$('motionToggle').disabled=true;statusMotion('카메라와 손 인식 모델을 준비하고 있어요…');
+ try{
+  if(!navigator.mediaDevices?.getUserMedia)throw new Error('이 브라우저에서는 카메라를 사용할 수 없어요. Chrome/Edge에서 HTTPS 또는 localhost로 열어 주세요.');
+  motion.stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:'user',width:{ideal:640},height:{ideal:480}},audio:false});
+  const video=$('motionVideo');video.srcObject=motion.stream;await video.play();
+  if(!motion.detector){const {FilesetResolver,HandLandmarker}=await import('https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.22/vision_bundle.mjs');
+   const files=await FilesetResolver.forVisionTasks('https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.22/wasm');
+   motion.detector=await HandLandmarker.createFromOptions(files,{baseOptions:{modelAssetPath:'https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task'},runningMode:'VIDEO',numHands:2,minHandDetectionConfidence:.65,minHandPresenceConfidence:.65,minTrackingConfidence:.65});}
+  motion.enabled=true;motion.lastVideo=-1;resetGesture();P=null;$('dg').style.display='none';$('cameraBox').style.display='block';$('motionToggle').textContent='📷 카메라 끄기';statusMotion('양손을 보여 주세요. 시위 손의 엄지·검지를 벌려 준비!');motionFrame();
+ }catch(e){stopMotion();statusMotion(e.name==='NotAllowedError'?'카메라 권한이 필요해요. 주소창의 카메라 권한을 허용한 후 다시 켜 주세요.':e.name==='NotFoundError'?'연결된 카메라가 없어요. 마우스로 플레이할 수 있어요.':e.message||'카메라 준비 실패. 인터넷 연결과 카메라를 확인해 주세요.');}
+ finally{motion.loading=false;$('motionToggle').disabled=false;}
+});
+function handPoint(h){return {x:1-(h[0].x+h[5].x+h[17].x)/3,y:(h[0].y+h[5].y+h[17].y)/3};}
+function pinchRatio(h){const d=(a,b)=>Math.hypot(a.x-b.x,a.y-b.y);return d(h[4],h[8])/Math.max(.025,d(h[5],h[17]));}
+function applyHands(hands,now){
+ const ctx=$('motionCanvas').getContext('2d');ctx.clearRect(0,0,640,480);
+ for(const h of hands){ctx.strokeStyle='#65ffcb';ctx.lineWidth=3;for(const [a,b] of [[0,5],[5,9],[9,13],[13,17],[17,0],[0,1],[1,2],[2,3],[3,4],[5,6],[6,7],[7,8],[9,10],[10,11],[11,12],[13,14],[14,15],[15,16],[17,18],[18,19],[19,20]]){ctx.beginPath();ctx.moveTo(h[a].x*640,h[a].y*480);ctx.lineTo(h[b].x*640,h[b].y*480);ctx.stroke();}for(const p of h){ctx.fillStyle='#fff';ctx.beginPath();ctx.arc(p.x*640,p.y*480,4,0,7);ctx.fill();}}
+ if(hands.length!==2||document.hidden){resetGesture();statusMotion('양손이 보여야 해요 · 인식 대기 중에는 달리기가 멈춰요');return;}
+ if(state!=='run'){resetGesture();statusMotion('준비 완료! 시작하기를 누른 후 양손을 보여 주세요.');return;}
+ let bowHand,drawHand;
+ if(motion.gesture){const g=motion.gesture;const p=hands.map(handPoint);const cost=(a,b)=>Math.hypot(p[a].x-g.bow.x,p[a].y-g.bow.y)+Math.hypot(p[b].x-g.draw.x,p[b].y-g.draw.y);const i=cost(0,1)<=cost(1,0)?0:1;bowHand=hands[i];drawHand=hands[1-i];
+  if(Math.hypot(handPoint(bowHand).x-g.bow.x,handPoint(bowHand).y-g.bow.y)>.22||Math.hypot(handPoint(drawHand).x-g.draw.x,handPoint(drawHand).y-g.draw.y)>.22){resetGesture();return;}
+ }else{const i=handPoint(hands[0]).x<handPoint(hands[1]).x?0:1;bowHand=hands[i];drawHand=hands[1-i];}
+ const b=handPoint(bowHand),d=handPoint(drawHand),pin=pinchRatio(drawHand);
+ motion.ready=++motion.stable>=8;
+ if(!motion.ready){statusMotion('양손 인식 중… 잠깐 유지해 주세요');return;}
+ if(motion.needOpen){statusMotion('화면 오른쪽 시위 손의 엄지·검지를 벌려 준비하세요');if(pin>.65){motion.needOpen=false;}return;}
+ if(!motion.gesture){statusMotion('오른쪽 손의 엄지·검지를 모으고, 두 손을 벌려 당겨요');if(pin<.35&&cool<=0){motion.gesture={bow:b,draw:d,start:Math.hypot(b.x-d.x,b.y-d.y),time:now};charging=1;pull=0;}return;}
+ const g=motion.gesture;g.bow=b;g.draw=d;
+ const target=cl((Math.hypot(b.x-d.x,b.y-d.y)-g.start)/.25,0,1);pull+=(target-pull)*.35;
+ aimY+=(cl((b.x-.36)*.85,-.3,.3)-aimY)*.25;aimP+=(cl((.55-b.y)*.48,-.05,.2)-aimP)*.25;
+ statusMotion(pull>.15?'조준 후 시위 손의 손가락을 벌리면 발사!':'손가락을 모은 채 두 손 사이를 더 벌려 주세요');
+ if(pin>.65)motion.open++;else motion.open=0;
+ if(motion.open>=3){const power=pull;const valid=now-g.time>180;motion.gesture=null;charging=0;pull=0;motion.open=0;motion.needOpen=true;if(valid&&power>.15){release(power);statusMotion('🏹 발사! 다시 손가락을 모아 당겨 보세요');}}
+}
+function motionFrame(now=performance.now()){
+ if(!motion.enabled)return;
+ const video=$('motionVideo');
+ try{if(video.readyState>=2&&video.currentTime!==motion.lastVideo&&now-motion.lastDetect>65){motion.lastVideo=video.currentTime;motion.lastDetect=now;const result=motion.detector.detectForVideo(video,now);applyHands(result.landmarks,now);}}
+ catch(e){stopMotion();statusMotion('손 인식이 중단됐어요. 카메라를 다시 켜거나 마우스로 플레이해 주세요.');return;}
+ if(now-motion.lastDetect>500){resetGesture();statusMotion('카메라 영상을 기다리고 있어요…');}
+ motion.raf=requestAnimationFrame(motionFrame);
+}
+document.addEventListener('visibilitychange',()=>{if(document.hidden&&motion.enabled)resetGesture();});
+window.addEventListener('pagehide',stopMotion);
 /* 루프 */
 let last=0;
 function loop(t){requestAnimationFrame(loop);const dt=Math.min(.05,(t-last)/1000||0);last=t;T+=dt;cool-=dt;
- if(state=='run'||state=='dying'){const tgt=state=='run'?11+qi*1.6:0;speed+=(tgt-speed)*Math.min(1,dt*3);cam.position.z-=speed*dt;
+ if(state=='run'||state=='dying'){const tgt=state=='run'?11+qi*1.6:0;speed+=(tgt-speed)*Math.min(1,dt*3);cam.position.z-=(motion.enabled&&!motion.ready?0:speed)*dt;
   cam.position.y=2.6+Math.sin(T*9)*.06*Math.min(1,speed/10);cam.rotation.z=Math.sin(T*4.5)*.01;horse.rotation.x=Math.sin(T*9+1)*.04}
  if(state=='crash'){ct+=dt;const k=Math.min(1,ct/.8),e=k*k*(3-2*k);cam.position.y=2.6-1.95*e+Math.sin(ct*30)*.05*(1-k);cam.rotation.x=-.55*e;cam.rotation.z=1.15*e;cam.position.z+=dt*3*(1-k);horse.rotation.x=-.5*e;timer-=dt;if(timer<=0)over()}
  far.position.z=cam.position.z;
